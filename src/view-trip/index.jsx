@@ -436,10 +436,12 @@ const ViewTrip = () => {
                                   <div key={`morning-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img 
-                                        src={place.placeImageUrl || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'} 
+                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`} 
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                                        onError={(e) => { 
+                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        }}
                                       />
                                     </div>
                                     
@@ -516,10 +518,12 @@ const ViewTrip = () => {
                                   <div key={`afternoon-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img 
-                                        src={place.placeImageUrl || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'} 
+                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`} 
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                                        onError={(e) => { 
+                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        }}
                                       />
                                     </div>
                                     
@@ -596,10 +600,12 @@ const ViewTrip = () => {
                                   <div key={`evening-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img 
-                                        src={place.placeImageUrl || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'} 
+                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`} 
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                                        onError={(e) => { 
+                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        }}
                                       />
                                     </div>
                                     

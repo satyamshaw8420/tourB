@@ -8,7 +8,7 @@ import TripMap from './TripMap';
 import { categorizeActivitiesByTime, getTimePeriodLabel, getTimePeriodDescription } from '@/utils/itineraryHelpers';
 import { getPlaceImage } from '@/service/ImageGenerationService';
 
-// Function to enhance places with real images
+// Function to enhance places with real images from Unsplash API in real-time
 const enhancePlacesWithImages = async (itinerary) => {
   if (!itinerary || !Array.isArray(itinerary)) return itinerary;
   
@@ -22,7 +22,7 @@ const enhancePlacesWithImages = async (itinerary) => {
     
     const enhancedPlan = [];
     for (const place of day.plan) {
-      // If place doesn't have an image URL, try to get one from Unsplash
+      // If place doesn't have an image URL, try to get one from Unsplash API in real-time
       if (!place.placeImageUrl) {
         try {
           const imageUrl = await getPlaceImage(place.placeName);
@@ -30,7 +30,7 @@ const enhancePlacesWithImages = async (itinerary) => {
             place.placeImageUrl = imageUrl;
           }
         } catch (error) {
-          console.error('Error getting image for place:', place.placeName, error);
+          console.error('Error getting image for place from Unsplash:', place.placeName, error);
         }
       }
       enhancedPlan.push(place);
@@ -88,6 +88,7 @@ const TripDetails = () => {
     numberOfMembers: '',
     startDate: ''
   });
+  const [message, setMessage] = useState({ type: '', text: '' }); // For showing success/error messages
 
   // Fetch trip data using Convex - only if we have a valid ID
   const trip = tripId ? useQuery(api.tripsQueries.getTripById, { id: tripId }) : null;
@@ -132,14 +133,16 @@ const TripDetails = () => {
       // Set the main trip data
       setTripData(trip);
 
-      // Initialize edit form data
+      // Initialize edit form data with proper type handling
       if (trip.userSelection) {
         setEditFormData({
           location: trip.userSelection.location?.label || '',
-          travelers: trip.userSelection.travelers || '',
+          travelers: trip.userSelection.travelers !== null && trip.userSelection.travelers !== undefined ? 
+            String(trip.userSelection.travelers) : '',
           days: trip.userSelection.days || '',
           budget: trip.userSelection.budget || '',
-          numberOfMembers: trip.userSelection.numberOfMembers || '',
+          numberOfMembers: trip.userSelection.numberOfMembers !== null && trip.userSelection.numberOfMembers !== undefined ? 
+            String(trip.userSelection.numberOfMembers) : '',
           startDate: trip.userSelection.startDate || ''
         });
       }
@@ -199,24 +202,18 @@ const TripDetails = () => {
         
         setHotelsData(hotels);
       }
-      // Extract itinerary data - improved logic to handle different data structures
+      // Extract itinerary data - simplified and more robust logic
       if (parsedData) {
         let itinerary = [];
 
-        // Check multiple possible locations for itinerary data
+        // Handle different itinerary formats with priority order
         if (parsedData.itinerary && Array.isArray(parsedData.itinerary)) {
           // Direct array format
-          // Filter out empty itinerary arrays
-          if (parsedData.itinerary.length > 0) {
-            itinerary = parsedData.itinerary;
-          }
+          itinerary = parsedData.itinerary;
         } else if (parsedData.itinerary && typeof parsedData.itinerary === 'object') {
-          // Object format - convert to array
+          // Object format with days array
           if (Array.isArray(parsedData.itinerary.days)) {
-            // If it's structured as { days: [...] }
-            if (parsedData.itinerary.days.length > 0) {
-              itinerary = parsedData.itinerary.days;
-            }
+            itinerary = parsedData.itinerary.days;
           } else {
             // Convert object values to array
             const itineraryArray = Object.values(parsedData.itinerary);
@@ -226,49 +223,78 @@ const TripDetails = () => {
           }
         } else if (parsedData.plan && Array.isArray(parsedData.plan)) {
           // Alternative format where itinerary is stored as 'plan'
-          if (parsedData.plan.length > 0) {
-            itinerary = parsedData.plan;
-          }
-        } else {
-          // Try to find itinerary in nested objects
-          const findItinerary = (obj) => {
-            if (!obj || typeof obj !== 'object') return null;
+          itinerary = parsedData.plan;
+        }
+
+        // If still no itinerary found, try more flexible extraction
+        if (itinerary.length === 0) {
+          // Recursive search for itinerary data in nested objects
+          const findItineraryInObject = (obj) => {
+            if (!obj || typeof obj !== 'object') return [];
             
-            // Directly check if this object is an itinerary
-            if (obj.itinerary && Array.isArray(obj.itinerary)) {
-              return obj.itinerary;
+            // Direct array check
+            if (Array.isArray(obj)) {
+              return obj;
             }
             
-            // Check if this is a days array format
-            if (obj.days && Array.isArray(obj.days)) {
-              return obj.days;
+            // Check for common itinerary property names
+            for (const key of ['itinerary', 'days', 'plan']) {
+              if (obj[key] && Array.isArray(obj[key])) {
+                return obj[key];
+              }
+              if (obj[key] && typeof obj[key] === 'object' && Array.isArray(obj[key].days)) {
+                return obj[key].days;
+              }
             }
             
             // Recursively search in nested objects
             for (const key in obj) {
               if (typeof obj[key] === 'object') {
-                const result = findItinerary(obj[key]);
-                if (result) return result;
+                const result = findItineraryInObject(obj[key]);
+                if (result.length > 0) return result;
               }
             }
             
-            return null;
+            return [];
           };
           
-          const foundItinerary = findItinerary(parsedData);
-          if (foundItinerary) {
-            itinerary = foundItinerary;
+          itinerary = findItineraryInObject(parsedData);
+        }
+
+        // Final fallback - try to extract from raw tripData string
+        if (itinerary.length === 0 && typeof trip.tripData === 'string') {
+          try {
+            // Look for JSON patterns in the raw string
+            const jsonPatterns = [
+              /"itinerary"\s*:\s*(\[[^\]]*\])/,
+              /"days"\s*:\s*(\[[^\]]*\])/,
+              /"plan"\s*:\s*(\[[^\]]*\])/,
+              /(\[[^\]]*\])\s*$/
+            ];
+            
+            for (const pattern of jsonPatterns) {
+              const match = trip.tripData.match(pattern);
+              if (match && match[1]) {
+                const parsedArray = JSON.parse(match[1]);
+                if (Array.isArray(parsedArray)) {
+                  itinerary = parsedArray;
+                  break;
+                }
+              }
+            }
+          } catch (parseError) {
+            console.warn('Could not extract itinerary from string:', parseError);
           }
         }
 
+        console.log('Final itinerary data:', itinerary);
+        
         // Enhance itinerary with real images
         enhancePlacesWithImages(itinerary).then(enhancedItinerary => {
           setItineraryData(enhancedItinerary);
         });
       }
-
-      setLoading(false);
-    } catch (err) {
+      setLoading(false);    } catch (err) {
       console.error('Error processing trip data:', err);
       setError('Error loading trip data');
       setLoading(false);
@@ -351,10 +377,12 @@ const TripDetails = () => {
     if (isEditing && tripData?.userSelection) {
       setEditFormData({
         location: tripData.userSelection.location?.label || '',
-        travelers: tripData.userSelection.travelers || '',
+        travelers: tripData.userSelection.travelers !== null && tripData.userSelection.travelers !== undefined ? 
+          String(tripData.userSelection.travelers) : '',
         days: tripData.userSelection.days || '',
         budget: tripData.userSelection.budget || '',
-        numberOfMembers: tripData.userSelection.numberOfMembers || '',
+        numberOfMembers: tripData.userSelection.numberOfMembers !== null && tripData.userSelection.numberOfMembers !== undefined ? 
+          String(tripData.userSelection.numberOfMembers) : '',
         startDate: tripData.userSelection.startDate || ''
       });
     }
@@ -363,24 +391,62 @@ const TripDetails = () => {
   // Save edited trip
   const saveEditedTrip = async () => {
     try {
-      // Validate form data
-      if (!editFormData.location.trim()) {
-        alert('Please enter a destination');
+      // Clear any existing messages
+      setMessage({ type: '', text: '' });
+      
+      // Enhanced validation with better error messages
+      if (!editFormData.location || !editFormData.location.trim()) {
+        setMessage({ type: 'error', text: 'Please enter a valid destination' });
         return;
       }
 
-      if (!editFormData.days.trim()) {
-        alert('Please enter the duration');
+      if (!editFormData.days || !editFormData.days.trim()) {
+        setMessage({ type: 'error', text: 'Please enter a valid duration' });
         return;
+      }
+
+      // Validate numeric fields
+      const travelers = parseInt(editFormData.travelers);
+      if (editFormData.travelers && (isNaN(travelers) || travelers <= 0)) {
+        setMessage({ type: 'error', text: 'Please enter a valid number of travelers (positive number)' });
+        return;
+      }
+
+      const numberOfMembers = parseInt(editFormData.numberOfMembers);
+      if (editFormData.numberOfMembers && (isNaN(numberOfMembers) || numberOfMembers <= 0)) {
+        setMessage({ type: 'error', text: 'Please enter a valid number of members (positive number)' });
+        return;
+      }
+
+      // Validate budget selection if provided
+      const validBudgets = ['', 'low', 'medium', 'high'];
+      if (editFormData.budget && !validBudgets.includes(editFormData.budget)) {
+        setMessage({ type: 'error', text: 'Please select a valid budget option' });
+        return;
+      }
+
+      // Validate date format if provided
+      if (editFormData.startDate) {
+        const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+        if (!dateRegex.test(editFormData.startDate)) {
+          setMessage({ type: 'error', text: 'Please enter a valid start date in YYYY-MM-DD format' });
+          return;
+        }
+        
+        const date = new Date(editFormData.startDate);
+        if (isNaN(date.getTime())) {
+          setMessage({ type: 'error', text: 'Please enter a valid start date' });
+          return;
+        }
       }
 
       const updatedTripData = {
         ...tripData,
         userSelection: {
           ...tripData.userSelection,
-          location: { label: editFormData.location },
+          location: { label: editFormData.location.trim() },
           travelers: editFormData.travelers ? parseInt(editFormData.travelers) : null,
-          days: editFormData.days,
+          days: editFormData.days.trim(),
           budget: editFormData.budget || null,
           numberOfMembers: editFormData.numberOfMembers ? parseInt(editFormData.numberOfMembers) : null,
           startDate: editFormData.startDate || null
@@ -398,10 +464,15 @@ const TripDetails = () => {
       setIsEditing(false);
 
       // Show success message
-      alert('Trip updated successfully!');
+      setMessage({ type: 'success', text: 'Trip updated successfully!' });
+      
+      // Clear success message after 3 seconds
+      setTimeout(() => {
+        setMessage({ type: '', text: '' });
+      }, 3000);
     } catch (error) {
       console.error('Error updating trip:', error);
-      alert('Failed to update trip. Please try again.');
+      setMessage({ type: 'error', text: 'Failed to update trip. Please try again.' });
     }
   };
 
@@ -469,7 +540,8 @@ const TripDetails = () => {
                 type="text"
                 value={editFormData.location}
                 onChange={(e) => handleEditChange('location', e.target.value)}
-                className="border-b-2 border-blue-500 bg-transparent text-center w-full md:w-auto"
+                className="border-b-2 border-blue-500 bg-transparent text-center w-full md:w-auto px-2 py-1"
+                placeholder="Enter destination"
               />
             ) : (
               safeLocation.label || 'Trip'
@@ -488,7 +560,8 @@ const TripDetails = () => {
                   type="text"
                   value={editFormData.location}
                   onChange={(e) => handleEditChange('location', e.target.value)}
-                  className="border-b border-gray-300 w-full"
+                  className="border-b border-gray-300 w-full px-2 py-1"
+                  placeholder="Enter destination"
                 />
               ) : (
                 <p className="font-semibold text-lg">{safeLocation.label || 'Not specified'}</p>
@@ -501,7 +574,8 @@ const TripDetails = () => {
                   type="text"
                   value={editFormData.days}
                   onChange={(e) => handleEditChange('days', e.target.value)}
-                  className="border-b border-gray-300 w-full"
+                  className="border-b border-gray-300 w-full px-2 py-1"
+                  placeholder="e.g., 5 days"
                 />
               ) : (
                 <p className="font-semibold text-lg">{safeUserSelection.days || 'N/A'} Days</p>
@@ -514,7 +588,9 @@ const TripDetails = () => {
                   type="number"
                   value={editFormData.travelers}
                   onChange={(e) => handleEditChange('travelers', e.target.value)}
-                  className="border-b border-gray-300 w-full"
+                  className="border-b border-gray-300 w-full px-2 py-1"
+                  placeholder="Number of travelers"
+                  min="1"
                 />
               ) : (
                 <p className="font-semibold text-lg">{getTravelersLabel(safeUserSelection.travelers)}</p>
@@ -526,7 +602,7 @@ const TripDetails = () => {
                 <select
                   value={editFormData.budget}
                   onChange={(e) => handleEditChange('budget', e.target.value)}
-                  className="border-b border-gray-300 w-full"
+                  className="border-b border-gray-300 w-full px-2 py-1"
                 >
                   <option value="">Select Budget</option>
                   <option value="low">Low Budget</option>
@@ -548,8 +624,9 @@ const TripDetails = () => {
                   type="number"
                   value={editFormData.numberOfMembers}
                   onChange={(e) => handleEditChange('numberOfMembers', e.target.value)}
-                  className="border-b border-gray-300 w-full"
+                  className="border-b border-gray-300 w-full px-2 py-1"
                   placeholder="Enter number of members"
+                  min="1"
                 />
               </div>
               <div>
@@ -558,7 +635,7 @@ const TripDetails = () => {
                   type="date"
                   value={editFormData.startDate}
                   onChange={(e) => handleEditChange('startDate', e.target.value)}
-                  className="border-b border-gray-300 w-full"
+                  className="border-b border-gray-300 w-full px-2 py-1"
                 />
               </div>
             </div>
@@ -629,10 +706,12 @@ const TripDetails = () => {
                 <div key={index} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
                   <div className="h-48 overflow-hidden">
                     <img
-                      src={hotel.hotelImageUrl || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'}
+                      src={hotel.hotelImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`}
                       alt={hotel.hotelName || 'Hotel Image'}
                       className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                      onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                      onError={(e) => { 
+                        e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`;
+                      }}
                     />
                   </div>
                   <div className="p-6">
@@ -682,11 +761,10 @@ const TripDetails = () => {
         )}
 
         {/* Enhanced Itinerary Section with Daily Breakdown */}
-        {itineraryData && itineraryData.length > 0 ? (
+        {itineraryData && Array.isArray(itineraryData) && itineraryData.length > 0 ? (
           <div className="mb-12">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-800 flex items-center">
-                <span className="mr-2">📅</span> Daily Itinerary
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center">                <span className="mr-2">📅</span> Daily Itinerary
               </h2>
               <span className="bg-purple-100 text-purple-800 text-sm font-medium px-3 py-1 rounded-full">
                 {itineraryData.length} Days
@@ -718,10 +796,12 @@ const TripDetails = () => {
                         <div className="flex items-center">
                           <div className="bg-white p-2 rounded-lg mr-3">
                             <img
-                              src={hotelsData[0].hotelImageUrl || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'}
+                              src={hotelsData[0].hotelImageUrl || `https://placehold.co/200x200/007bff/ffffff?text=${encodeURIComponent(hotelsData[0].hotelName || 'Hotel')}`}
                               alt={hotelsData[0].hotelName || 'Hotel'}
                               className="w-12 h-12 object-cover rounded"
-                              onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                              onError={(e) => { 
+                                e.target.src = `https://placehold.co/200x200/007bff/ffffff?text=${encodeURIComponent(hotelsData[0].hotelName || 'Hotel')}`;
+                              }}
                             />
                           </div>
                           <div>
@@ -757,10 +837,12 @@ const TripDetails = () => {
                                   <div key={`morning-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img
-                                        src={place.placeImageUrl || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'}
+                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`}
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                                        onError={(e) => { 
+                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        }}
                                       />
                                     </div>
 
@@ -842,10 +924,12 @@ const TripDetails = () => {
                                   <div key={`afternoon-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img
-                                        src={place.placeImageUrl || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'}
+                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`}
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                                        onError={(e) => { 
+                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        }}
                                       />
                                     </div>
 
@@ -927,10 +1011,12 @@ const TripDetails = () => {
                                   <div key={`evening-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img
-                                        src={place.placeImageUrl || 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'}
+                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`}
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1476514525535-07fb3b4ae5f1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
+                                        onError={(e) => { 
+                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        }}
                                       />
                                     </div>
 
@@ -1100,6 +1186,13 @@ const TripDetails = () => {
           </div>
         )}
 
+        {/* Message display */}
+        {message.text && (
+          <div className={`mt-4 p-4 rounded-lg ${message.type === 'error' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}`}>
+            {message.text}
+          </div>
+        )}
+        
         {/* Action Buttons */}
         <div className="mt-12 flex flex-wrap gap-4 justify-center">
           <button className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105 flex items-center shadow-lg">

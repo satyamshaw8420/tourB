@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useFetchTrips } from '@/hooks/useFetchTrips';
 import { getLocationCoordinates } from '@/utils/geocodeHelper';
@@ -125,7 +125,26 @@ const processForecastData = (forecastList) => {
 
 const WeatherIntegration = () => {
   const navigate = useNavigate();
-  const { allTrips } = useFetchTrips();
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Get user from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+  
+  // Fetch trips only for the current user
+  const { allTrips } = useFetchTrips(user?._id || null);
+  
   const [selectedTrip, setSelectedTrip] = useState(null);
   const [weatherData, setWeatherData] = useState(null);
   const [loading, setLoading] = useState(false);

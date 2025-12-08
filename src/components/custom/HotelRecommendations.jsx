@@ -42,11 +42,11 @@ const HotelRecommendations = ({ hotels, destination }) => {
           <div key={index} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="h-48 overflow-hidden">
               <img 
-                src={hotel.hotelImageUrl || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'} 
+                src={hotel.hotelImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`} 
                 alt={hotel.hotelName || 'Hotel Image'}
                 className="w-full h-full object-cover"
                 onError={(e) => { 
-                  e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; 
+                  e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`;
                 }}
               />
             </div>

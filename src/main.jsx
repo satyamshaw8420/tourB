@@ -18,9 +18,9 @@ import DataVerification from './components/custom/DataVerification.jsx'
 import ViewTrip from './view-trip/index.jsx'
 import SignUp from './sign-up/index.jsx'
 import FinancialPage from './components/custom/FinancialPage.jsx'
+import MultiTrip from './multi-trip/index.jsx'
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { ConvexProvider, ConvexReactClient } from "convex/react";
-
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
 
 // Clear any stale Google OAuth data on app initialization
@@ -131,11 +131,14 @@ const router = createBrowserRouter([
       {
         path: '/financial',
         element: <FinancialPage />
+      },
+      {
+        path: '/multi-trip',
+        element: <MultiTrip />
       }
     ]
   }
 ])
-
 // Removed React.StrictMode which can sometimes cause issues with third-party libraries like Google OAuth
 ReactDOM.createRoot(document.getElementById('root')).render(
   <GoogleOAuthProvider 

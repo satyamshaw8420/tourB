@@ -17,12 +17,12 @@ import { clearAllUserData } from '@/utils/dataCleanup';
 
 // Import the enhanced AI service
 import { generateTravelPlanWithRealHotels } from '../service/AIModal';
-import { validateAndEnhanceTripData } from '../service/EnhancedAIModal';
+import { validateAndEnhanceTripData, generateComprehensiveFallbackItinerary } from '../service/EnhancedAIModal';
 
-function CreateTrip() {
+function MultiTrip() {
   const navigate = useNavigate();
   const [formData, setFormData] = useState({
-    location: { label: '' },
+    destinations: [{ label: '' }], // Array of destinations instead of single location
     travelers: null,
     days: '',
     budget: null
@@ -32,12 +32,13 @@ function CreateTrip() {
   const { saveTripToConvex: saveTrip } = useSaveTrip();
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [isCreatingTrip, setIsCreatingTrip] = useState(false);
-  const [destinationImage, setDestinationImage] = useState(null); // New state for destination image
+  const [destinationImages, setDestinationImages] = useState([]); // Array of images for destinations
   const [user, setUser] = useState(null); // Track user authentication state
   // Add missing state variables
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [activeDestinationIndex, setActiveDestinationIndex] = useState(-1); // Track which destination is being edited
 
   // Check if user is logged in
   useEffect(() => {
@@ -174,7 +175,7 @@ function CreateTrip() {
   // Debounce timer ref
   const debounceTimer = useRef(null)
 
-  const fetchSuggestions = async (searchQuery) => {
+  const fetchSuggestions = async (searchQuery, index) => {
     console.log('Fetching suggestions for:', searchQuery);
     if (!searchQuery.trim()) {
       setSuggestions([])
@@ -212,6 +213,7 @@ function CreateTrip() {
         })
         setSuggestions(suggestions)
         setShowSuggestions(true)
+        setActiveDestinationIndex(index)
       } else {
         console.error('API request failed with status:', response.status);
         setSuggestions([])
@@ -226,7 +228,7 @@ function CreateTrip() {
     }
   }
 
-  const handleInputChange = (name, value) => {
+  const handleInputChange = (name, value, index = null) => {
     // Add validation for days field - limit to 5 or less
     if (name === 'days') {
       const daysValue = parseInt(value);
@@ -237,17 +239,25 @@ function CreateTrip() {
       }
     }
     
-    console.log('Updating form data:', name, value);
-    if (name === 'destination') {
-      // For destination, we update the location.label property
-      setFormData(prev => ({
-        ...prev,
-        location: { label: value }
-      }));
+    console.log('Updating form data:', name, value, index);
+    if (name === 'destinations') {
+      // For destinations, we update the specific destination in the array
+      setFormData(prev => {
+        const newDestinations = [...prev.destinations];
+        newDestinations[index] = { label: value };
+        return {
+          ...prev,
+          destinations: newDestinations
+        };
+      });
       
       // Clear destination image if input is empty
       if (!value.trim()) {
-        setDestinationImage(null);
+        setDestinationImages(prev => {
+          const newImages = [...prev];
+          newImages[index] = null;
+          return newImages;
+        });
       }
     } else {
       setFormData(prev => ({
@@ -257,9 +267,9 @@ function CreateTrip() {
     }
   };
   
-  const handleDestinationChange = (e) => {
+  const handleDestinationChange = (e, index) => {
     const value = e.target.value;
-    handleInputChange('destination', value);
+    handleInputChange('destinations', value, index);
       
     // Clear previous timer
     if (debounceTimer.current) {
@@ -269,7 +279,7 @@ function CreateTrip() {
     // Set new timer
     debounceTimer.current = setTimeout(() => {
       if (value.trim()) {
-        fetchSuggestions(value);
+        fetchSuggestions(value, index);
       } else {
         // Hide suggestions when input is empty
         setShowSuggestions(false);
@@ -277,29 +287,34 @@ function CreateTrip() {
     }, 300); // 300ms debounce
   };
 
-  const handleSuggestionClick = (suggestion) => {
+  const handleSuggestionClick = (suggestion, index) => {
     const locationLabel = suggestion.properties.name || '';
-    handleInputChange('destination', locationLabel);
+    handleInputChange('destinations', locationLabel, index);
     setShowSuggestions(false);
+    setActiveDestinationIndex(-1);
     
     // Also update the location object with more details
-    setFormData(prev => ({
-      ...prev,
-      location: {
+    setFormData(prev => {
+      const newDestinations = [...prev.destinations];
+      newDestinations[index] = {
         label: locationLabel,
         value: {
           description: locationLabel,
           place_id: suggestion.properties.osm_id
         }
-      }
-    }));
+      };
+      return {
+        ...prev,
+        destinations: newDestinations
+      };
+    });
     
     // Generate image for the selected destination
-    generateDestinationImage(locationLabel);
+    generateDestinationImage(locationLabel, index);
   };
 
   // Function to generate image for a destination with content filtering
-  const generateDestinationImage = async (destination) => {
+  const generateDestinationImage = async (destination, index) => {
     // Content filtering to prevent inappropriate content
     const inappropriateKeywords = [
       'adult', 'sex', 'porn', 'nude', 'xxx', 'explicit', 'nsfw', 
@@ -312,7 +327,11 @@ function CreateTrip() {
     
     if (isFiltered) {
       console.log('Destination filtered due to inappropriate content');
-      setDestinationImage(null);
+      setDestinationImages(prev => {
+        const newImages = [...prev];
+        newImages[index] = null;
+        return newImages;
+      });
       return;
     }
     
@@ -329,36 +348,85 @@ function CreateTrip() {
         // Additional check for inappropriate content in URLs
         const lowerUrl = imageUrl.toLowerCase();
         const urlFiltered = inappropriateKeywords.some(keyword => lowerUrl.includes(keyword));
-      
+        
         if (urlFiltered) {
           console.log('Image URL filtered due to inappropriate content');
-          setDestinationImage(null);
+          setDestinationImages(prev => {
+            const newImages = [...prev];
+            newImages[index] = null;
+            return newImages;
+          });
         } else {
-          setDestinationImage(imageUrl);
+          setDestinationImages(prev => {
+            const newImages = [...prev];
+            newImages[index] = imageUrl;
+            return newImages;
+          });
           console.log(`Found image for ${destination}: ${imageUrl}`);
         }
       } else {
         // Fallback to placeholder image
         const placeholderUrl = generatePlaceholderImage(destination);
-        setDestinationImage(placeholderUrl);
+        setDestinationImages(prev => {
+          const newImages = [...prev];
+          newImages[index] = placeholderUrl;
+          return newImages;
+        });
         console.log(`Using placeholder image for ${destination}: ${placeholderUrl}`);
       }
     } catch (error) {
       console.error('Error generating destination image from Unsplash:', error);
       // Fallback to placeholder image on error
       const placeholderUrl = generatePlaceholderImage(destination);
-      setDestinationImage(placeholderUrl);
+      setDestinationImages(prev => {
+        const newImages = [...prev];
+        newImages[index] = placeholderUrl;
+        return newImages;
+      });
     } finally {
       setLoading(false);
     }
   };
 
+  // Function to add a new destination field
+  const addDestination = () => {
+    setFormData(prev => ({
+      ...prev,
+      destinations: [...prev.destinations, { label: '' }]
+    }));
+    setDestinationImages(prev => [...prev, null]);
+  };
+
+  // Function to remove a destination field
+  const removeDestination = (index) => {
+    if (formData.destinations.length <= 1) {
+      toast.warning("You need at least one destination");
+      return;
+    }
+    
+    setFormData(prev => {
+      const newDestinations = [...prev.destinations];
+      newDestinations.splice(index, 1);
+      return {
+        ...prev,
+        destinations: newDestinations
+      };
+    });
+    
+    setDestinationImages(prev => {
+      const newImages = [...prev];
+      newImages.splice(index, 1);
+      return newImages;
+    });
+  };
+
   const onSubmit = async () => {
     console.log("Form submitted with data:", formData);
     
-    // Enhanced validation with comprehensive error messages
-    if (!formData.location?.label) {
-      toast.warning("📍 Please enter a destination to get started");
+    // Validate form data with comprehensive error messages
+    const hasValidDestination = formData.destinations.some(dest => dest.label.trim());
+    if (!hasValidDestination) {
+      toast.warning("📍 Please enter at least one destination to get started");
       return;
     }
     
@@ -369,12 +437,21 @@ function CreateTrip() {
       'mature', 'violence', 'weapon', 'drug', 'alcohol', 'gambling'
     ];
     
-    const lowerDest = formData.location.label.toLowerCase();
-    const isFiltered = inappropriateKeywords.some(keyword => lowerDest.includes(keyword));
-    
-    if (isFiltered) {
-      toast.warning("📍 Please enter an appropriate destination");
-      return;
+    // Check each destination for inappropriate content
+    for (const destination of formData.destinations) {
+      const lowerDest = destination.label.toLowerCase();
+      const isFiltered = inappropriateKeywords.some(keyword => lowerDest.includes(keyword));
+      
+      if (isFiltered) {
+        toast.warning("📍 Please enter appropriate destinations");
+        return;
+      }
+      
+      // Additional validation for destination specificity
+      if (destination.label.trim().length < 2) {
+        toast.warning("📍 Please enter more specific destinations");
+        return;
+      }
     }
     
     if (!formData.travelers) {
@@ -400,12 +477,6 @@ function CreateTrip() {
     
     if (!formData.budget) {
       toast.warning("💰 Please select your budget preference");
-      return;
-    }
-    
-    // Additional validation for comprehensive data integrity
-    if (formData.location.label.length < 2) {
-      toast.warning("📍 Please enter a more specific destination");
       return;
     }
     
@@ -435,60 +506,22 @@ function CreateTrip() {
     OnCreateTrip();
   };
 
-  const handleCreateTrip = async () => {
-    console.log("Creating trip with data:", formData);
-    setIsCreatingTrip(true);
-    
-    try {
-      // Get user data from localStorage
-      const userString = localStorage.getItem('user');
-      const user = userString ? JSON.parse(userString) : null;
-      const userEmail = user?.email || 'unknown';
-      const userId = user?._id || 'anonymous';
-      
-      // Prepare prompt for AI
-      const FINAL_PROMPT = AI_PROMPT
-        .replace('{location}', formData.location.label)
-        .replace('{totalDays}', formData.days)
-        .replace('{traveler}', SelectTravelesList.find(item => item.id == formData.travelers)?.people || '')
-        .replace('{budget}', SelectBudgetOptions.find(item => item.id == formData.budget)?.title || '')
-        .replace('{totalDays}', formData.days);
-
-      console.log("Sending prompt to AI:", FINAL_PROMPT);
-      
-      // Send to Gemini AI
-      const result = await chatSession.sendMessage(FINAL_PROMPT);
-      console.log("AI Response:", result?.response?.text());
-      
-      // Save trip to database with proper parameters
-      const tripData = result?.response?.text();
-      console.log("Saving trip data:", tripData);
-      
-      const tripId = await saveTrip(tripData, formData, userEmail, userId);
-      console.log("Trip saved with ID:", tripId);
-      
-      // Navigate to trip details page
-      if (tripId) {
-        toast.success("🎉 Trip created successfully!");
-        navigate(`/view-trip/${tripId}`);
-      } else {
-        throw new Error("Failed to save trip");
-      }
-    } catch (err) {
-      console.error("Error creating trip:", err);
-      toast.error("❌ Failed to create trip. Please try again.");
-    } finally {
-      setIsCreatingTrip(false);
-    }
-  };
-
   const OnCreateTrip = async () => {
-    console.log("Creating trip with data:", formData);
+    console.log("Creating multi-destination trip with data:", formData);
     
     // Validate form data
-    if (!formData.location?.label) {
-      toast.error("Please select a destination");
+    const hasValidDestination = formData.destinations.some(dest => dest.label.trim());
+    if (!hasValidDestination) {
+      toast.error("Please enter at least one destination");
       return;
+    }
+    
+    // Additional validation for destination specificity
+    for (const destination of formData.destinations) {
+      if (destination.label.trim().length < 2) {
+        toast.error("Please enter more specific destinations");
+        return;
+      }
     }
     
     if (!formData.days) {
@@ -503,12 +536,6 @@ function CreateTrip() {
     
     if (!formData.budget) {
       toast.error("Please select a budget option");
-      return;
-    }
-    
-    // Additional validation for comprehensive data integrity
-    if (formData.location.label.length < 2) {
-      toast.error("Please enter a more specific destination");
       return;
     }
     
@@ -535,21 +562,27 @@ function CreateTrip() {
     try {
       setIsCreatingTrip(true);
       
+      // Prepare form data for multi-destination support
+      const multiDestFormData = {
+        ...formData,
+        location: { label: formData.destinations.map(d => d.label).join(' → ') } // Create a joined label for backward compatibility
+      };
+      
       // Generate trip plan with real hotels data
-      const tripData = await generateTravelPlanWithRealHotels(formData);
+      const tripData = await generateTravelPlanWithRealHotels(multiDestFormData);
       console.log("AI generated trip data:", tripData);
       
       // Validate and enhance trip data before saving
-      const enhancedTripData = validateAndEnhanceTripData(tripData, formData);
+      const enhancedTripData = validateAndEnhanceTripData(tripData, multiDestFormData);
       
       // Save trip to database with proper parameters
-      const tripId = await saveTrip(enhancedTripData, formData, userEmail, userId);
+      const tripId = await saveTrip(enhancedTripData, multiDestFormData, userEmail, userId);
       console.log("Trip saved with ID:", tripId);
       
       // Navigate to trip details page
       if (tripId) {
         navigate(`/view-trip/${tripId}`);
-        toast.success("🎉 Trip created successfully!");
+        toast.success("🎉 Multi-destination trip created successfully!");
       } else {
         throw new Error("Failed to save trip");
       }
@@ -567,7 +600,7 @@ function CreateTrip() {
       {/* Premium cinematic background with misty mountains */}
       <div className="absolute inset-0 z-0">
         {/* Blue-to-teal gradient base */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-900 via-teal-800 to-blue-700"></div>
+        <div className="absolute inset-0 bg-gradient-to-br from-purple-900 via-indigo-800 to-blue-700"></div>
         
         {/* Misty mountain silhouettes */}
         <div className="absolute bottom-0 left-0 right-0 h-2/3">
@@ -584,104 +617,126 @@ function CreateTrip() {
       </div>
       
       {/* Frosted glass panel */}
-      <div className="relative z-10 w-full max-w-2xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-3xl p-8">
+      <div className="relative z-10 w-full max-w-3xl bg-white/10 backdrop-blur-xl border border-white/20 shadow-xl rounded-3xl p-8">
         <div className="text-center mb-10">
-          <h2 className="font-bold text-3xl text-white">🗺️ Describe Your Trip</h2>
+          <h2 className="font-bold text-3xl text-white">🌍 Multi-Destination Trip Planner</h2>
           <p className="text-white/80 mt-2">
-            ✨ Just provide some basic information, and our AI will create a customized travel plan for you.
+            ✨ Plan a journey across multiple cities with our AI-powered itinerary generator.
           </p>
         </div>
 
-        {/* Destination Image Preview - Moved to top and properly positioned */}
-        {destinationImage && (
-          <div className="mb-8 flex justify-center">
-            <div className="relative w-full max-w-md h-48 rounded-xl overflow-hidden shadow-lg border-2 border-white/30">
-              <img 
-                src={destinationImage} 
-                alt={`Preview of ${formData.location.label}`}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  // Fallback to a more reliable placeholder if image fails to load
-                  e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(formData.location.label || 'Destination')}`;
-                }}
-              />
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-3">
-                <h3 className="text-white font-bold text-md truncate">{formData.location.label}</h3>
-              </div>
-              {/* Close button for image */}
-              <button 
-                onClick={() => {
-                  setDestinationImage(null);
-                  handleInputChange('destination', '');
-                }}
-                className="absolute top-2 right-2 bg-black/50 rounded-full p-1 hover:bg-black/70 transition-colors"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Destination Field */}
+        {/* Destination Fields */}
         <div className="mb-8">
           <div className="flex items-center mb-3">
             <span className="text-blue-300 text-xl mr-2">📍</span>
-            <h2 className="text-lg font-medium text-white">Destination</h2>
+            <h2 className="text-lg font-medium text-white">Destinations (in order)</h2>
           </div>
-          <div className="relative">
-            <Input 
-              placeholder="e.g., Paris, France" 
-              value={formData.location.label}
-              onChange={handleDestinationChange}
-              className="w-full py-4 px-4 bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-blue-300"
-            />
-            {/* Clear button when there's text */}
-            {formData.location.label && (
-              <button 
-                onClick={() => {
-                  handleInputChange('destination', '');
-                  setDestinationImage(null);
-                  setShowSuggestions(false);
-                }}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white"
-              >
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            )}
-            {loading && (
-              <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
-                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-300"></div>
-              </div>
-            )}
-            
-            {/* Fixed autocomplete dropdown with solid background for better readability */}
-            {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute top-full left-0 w-full mt-1 bg-white rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto border border-gray-200">
-                {suggestions.map((suggestion, index) => (
-                  <div
-                    key={`${suggestion.properties.osm_id}-${index}`}
-                    onClick={() => handleSuggestionClick(suggestion)}
-                    className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+          
+          {formData.destinations.map((destination, index) => (
+            <div key={index} className="mb-4 relative">
+              <div className="flex items-center gap-2">
+                <div className="flex-1 relative">
+                  <Input 
+                    placeholder={`Destination ${index + 1} (e.g., Paris, France)`} 
+                    value={destination.label}
+                    onChange={(e) => handleDestinationChange(e, index)}
+                    className="w-full py-4 px-4 bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl text-white placeholder-white/60 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  />
+                  {/* Clear button when there's text */}
+                  {destination.label && (
+                    <button 
+                      onClick={() => {
+                        handleInputChange('destinations', '', index);
+                        setDestinationImages(prev => {
+                          const newImages = [...prev];
+                          newImages[index] = null;
+                          return newImages;
+                        });
+                        setShowSuggestions(false);
+                      }}
+                      className="absolute right-3 top-1/2 transform -translate-y-1/2 text-white/70 hover:text-white"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  )}
+                  {loading && activeDestinationIndex === index && (
+                    <div className="absolute right-10 top-1/2 transform -translate-y-1/2">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-300"></div>
+                    </div>
+                  )}
+                </div>
+                
+                {/* Remove button (except for the first destination) */}
+                {formData.destinations.length > 1 && (
+                  <button
+                    onClick={() => removeDestination(index)}
+                    className="p-3 bg-red-500/20 hover:bg-red-500/30 rounded-xl border border-red-400/30 text-red-300 hover:text-red-200 transition-colors"
                   >
-                    <div className="font-medium text-gray-800">✈️ {suggestion.properties.name}</div>
-                    <div className="text-sm text-gray-600">
-                      📍 {suggestion.properties.country || suggestion.properties.state || ''}
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                    </svg>
+                  </button>
+                )}
+              </div>
+              
+              {/* Destination Image Preview */}
+              {destinationImages[index] && (
+                <div className="mt-3 flex justify-center">
+                  <div className="relative w-full max-w-md h-32 rounded-xl overflow-hidden shadow-lg border-2 border-white/30">
+                    <img 
+                      src={destinationImages[index]} 
+                      alt={`Preview of ${destination.label}`}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        // Fallback to a more reliable placeholder if image fails to load
+                        e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(destination.label || 'Destination')}`;
+                      }}
+                    />
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-2">
+                      <h3 className="text-white font-bold text-sm truncate">{destination.label}</h3>
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-            
-            {showSuggestions && suggestions.length === 0 && formData.location?.label?.length > 2 && !loading && (
-              <div className="absolute top-full left-0 w-full mt-1 bg-white rounded-xl shadow-lg z-50 p-2 border border-gray-200">
-                <div className="p-2 text-gray-600">❌ No locations found</div>
-              </div>
-            )}
-          </div>
+                </div>
+              )}
+              
+              {/* Autocomplete dropdown */}
+              {showSuggestions && activeDestinationIndex === index && suggestions.length > 0 && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-white rounded-xl shadow-lg z-50 max-h-60 overflow-y-auto border border-gray-200">
+                  {suggestions.map((suggestion, suggIndex) => (
+                    <div
+                      key={`${suggestion.properties.osm_id}-${suggIndex}`}
+                      onClick={() => handleSuggestionClick(suggestion, index)}
+                      className="p-3 hover:bg-blue-50 cursor-pointer border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="font-medium text-gray-800">✈️ {suggestion.properties.name}</div>
+                      <div className="text-sm text-gray-600">
+                        📍 {suggestion.properties.country || suggestion.properties.state || ''}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {showSuggestions && activeDestinationIndex === index && suggestions.length === 0 && destination.label?.length > 2 && !loading && (
+                <div className="absolute top-full left-0 w-full mt-1 bg-white rounded-xl shadow-lg z-50 p-2 border border-gray-200">
+                  <div className="p-2 text-gray-600">❌ No locations found</div>
+                </div>
+              )}
+            </div>
+          ))}
+          
+          {/* Add Destination Button */}
+          <button
+            onClick={addDestination}
+            className="w-full py-3 px-4 bg-white/10 backdrop-blur-lg border border-white/20 rounded-xl text-white hover:bg-white/15 transition-all flex items-center justify-center gap-2"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+            </svg>
+            Add Another Destination
+          </button>
         </div>
 
         {/* Traveler Selection */}
@@ -709,11 +764,11 @@ function CreateTrip() {
         <div className="mb-8">
           <div className="flex items-center mb-3">
             <span className="text-blue-300 text-xl mr-2">📅</span>
-            <h2 className="text-lg font-medium text-white">Number of Days</h2>
+            <h2 className="text-lg font-medium text-white">Total Number of Days</h2>
           </div>
           <div className="flex items-center">
             <Input 
-              placeholder="e.g., 3" 
+              placeholder="e.g., 7" 
               type="number"
               min="1"
               max="13"
@@ -723,7 +778,7 @@ function CreateTrip() {
             />
           </div>
           <p className="mt-2 text-sm text-white/70">
-            ⏳ Maximum 13 days allowed
+            ⏳ Maximum 13 days allowed for multi-destination trips
           </p>
         </div>
 
@@ -748,35 +803,26 @@ function CreateTrip() {
           </div>
         </div>
 
-        {/* Multi-Destination Trip Button */}
-        <div className="flex justify-center mb-6">
-          <button
-            onClick={() => navigate('/multi-trip')}
-            className="py-3 px-6 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105 flex items-center gap-2"
-          >
-            <span className="text-xl">🌍</span>
-            Plan Multi-Destination Trip
-          </button>
-        </div>
-        
         {/* Submit Button */}
         <div className="flex justify-center">
           <Button 
             onClick={onSubmit}
             disabled={isCreatingTrip}
-            className="py-4 px-8 bg-gradient-to-r from-blue-400 to-blue-200 text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="py-4 px-8 bg-gradient-to-r from-purple-500 to-indigo-500 text-white font-bold rounded-full shadow-lg hover:shadow-xl transition-all transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isCreatingTrip ? (
               <div className="flex items-center">
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                🤖 Creating Trip...
+                🤖 Creating Multi-Destination Trip...
               </div>
             ) : (
-              "Let's Build Your Trip"
+              "Let's Build Your Multi-Destination Trip"
             )}
           </Button>
         </div>
-      </div>      {/* Login Modal */}
+      </div>
+
+      {/* Login Modal */}
       {showLoginModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-8 rounded-xl shadow-xl max-w-md w-full mx-4 backdrop-blur-sm bg-white/90">
@@ -788,7 +834,7 @@ function CreateTrip() {
               </div>
               <h2 className="text-2xl font-bold mt-4 text-gray-900">Sign in to Continue</h2>
               <p className="text-gray-600 mt-2">
-                Sign in with Google to create and save your trip plans
+                Sign in with Google to create and save your multi-destination trip plans
               </p>
             </div>
             
@@ -818,4 +864,4 @@ function CreateTrip() {
   );
 }
 
-export default CreateTrip;
+export default MultiTrip;

@@ -85,3 +85,16 @@ export const updateTrip = mutation({
     return args.tripId;
   },
 });
+
+// Function to delete a trip
+export const deleteTrip = mutation({
+  args: {
+    tripId: v.id("trips"),
+  },
+  handler: async (ctx, args) => {
+    // Delete the trip from the database
+    await ctx.db.delete(args.tripId);
+    
+    return args.tripId;
+  },
+});

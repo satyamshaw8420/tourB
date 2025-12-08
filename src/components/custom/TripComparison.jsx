@@ -26,7 +26,26 @@ ChartJS.register(
 
 const TripComparison = () => {
   const navigate = useNavigate();
-  const { allTrips } = useFetchTrips();
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Get user from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+  
+  // Fetch trips only for the current user
+  const { allTrips } = useFetchTrips(user?._id || null);
+  
   const [selectedTrips, setSelectedTrips] = useState([]);
   const [comparisonData, setComparisonData] = useState(null);
 
@@ -133,11 +152,49 @@ const TripComparison = () => {
     return travelers[travelersId - 1] || 'Unknown';
   };
 
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your trips...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if user is not logged in
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Trip Comparison</h1>
+            <p className="text-gray-600">Compare your travel plans side-by-side</p>
+          </div>
+          
+          <div className="bg-white rounded-2xl shadow-lg p-12 text-center">
+            <div className="text-5xl mb-4">🔒</div>
+            <h3 className="text-xl font-semibold text-gray-800 mb-2">Authentication Required</h3>
+            <p className="text-gray-600 mb-6">Please sign in to compare your trips.</p>
+            <button
+              onClick={() => navigate('/sign-up')}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-6 rounded-lg transition-colors"
+            >
+              Sign In
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Trip Comparison</h1>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">My Trip Comparison</h1>
           <p className="text-gray-600">Compare your travel plans side-by-side</p>
         </div>
 
@@ -162,7 +219,7 @@ const TripComparison = () => {
 
         {/* Trip Selection */}
         <div className="mb-12">
-          <h2 className="text-2xl font-bold text-gray-800 mb-6">Select Trips to Compare</h2>
+          <h2 className="text-2xl font-bold text-gray-800 mb-6">Select Your Trips to Compare</h2>
           
           {allTrips && allTrips.length > 0 ? (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -378,7 +435,7 @@ const TripComparison = () => {
                 onClick={() => navigate('/trip-history')}
                 className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium py-2 px-6 rounded-lg transition-colors"
               >
-                View All Trips
+                View All My Trips
               </button>
             </div>
           </div>
