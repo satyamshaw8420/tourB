@@ -4,7 +4,26 @@ import { useFetchTrips } from '@/hooks/useFetchTrips';
 
 const SocialFeatures = () => {
   const navigate = useNavigate();
-  const { allTrips } = useFetchTrips();
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Get user from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+  
+  // Fetch trips only for the current user
+  const { allTrips } = useFetchTrips(user?._id || null);
+  
   const [activeTab, setActiveTab] = useState('feed');
   const [posts, setPosts] = useState([]);
   const [comments, setComments] = useState({});

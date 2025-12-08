@@ -124,10 +124,10 @@ const BlueOrangeHero = () => {
                 // User is not logged in - show sign in button
                 <button
                   onClick={handleGoogleSignIn}
-                  className="flex items-center justify-center gap-3 bg-white text-gray-700 font-medium py-3 px-6 rounded-lg hover:bg-gray-100 transition-colors shadow-lg"
+                  className="flex items-center justify-center gap-3 bg-white text-gray-700 font-semibold py-3 px-6 rounded-lg hover:bg-gray-100 transition-all duration-300 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
                 >
-                  <FcGoogle className="text-xl" />
-                  <span>Sign in with Google</span>
+                  <FcGoogle className="text-2xl" />
+                  <span className="text-base">Sign in with Google</span>
                 </button>
               )}
               

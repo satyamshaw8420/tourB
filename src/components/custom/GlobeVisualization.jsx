@@ -163,7 +163,25 @@ const AnimatedGlobe = ({ destinations, onDestinationClick }) => {
 const GlobeVisualization = () => {
   const [selectedDestination, setSelectedDestination] = useState(null);
   const [tripsDestinations, setTripsDestinations] = useState([]);
-  const { allTrips } = useFetchTrips();
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Get user from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+  
+  // Fetch trips only for the current user
+  const { allTrips } = useFetchTrips(user?._id || null);
   
   // Extract unique destinations from trips
   useEffect(() => {

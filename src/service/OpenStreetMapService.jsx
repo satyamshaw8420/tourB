@@ -65,7 +65,7 @@ const processOverpassResults = (elements, location, budgetTier) => {
       return {
         hotelName: element.tags.name || 'Hotel',
         hotelAddress: element.tags.address || element.tags['addr:full'] || element.tags['addr:street'] || 'Address not available',
-        description: element.tags.description || element.tags.amenity || `A comfortable hotel in ${location}`,
+        description: element.tags.description || element.tags.amenity || element.tags.tourism || `A comfortable hotel in ${location}`,
         geoCoordinates: { lat, lng },
         rating: baseRating,
         price: price,
@@ -127,29 +127,29 @@ const getFallbackHotels = (location, budgetTier) => {
       {
         hotelName: `Budget Lodge ${location}`,
         hotelAddress: `321 Economy Rd, ${location}`,
-        description: `Affordable and clean accommodation perfect for budget-conscious travelers`,
+        description: `Affordable and clean accommodation perfect for budget-conscious travelers exploring ${location}`,
         geoCoordinates: { lat: 40.7282, lng: -74.0776 },
         rating: 3,
         price: '₹4,500 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1520250497591-112f2f40a3f4?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Budget Lodge ${location}`)}`
       },
       {
         hotelName: `Hostel Central ${location}`,
         hotelAddress: `100 Backpacker St, ${location}`,
-        description: `Social hostel with dormitory and private rooms, ideal for solo travelers`,
+        description: `Social hostel with dormitory and private rooms, ideal for solo travelers exploring ${location}`,
         geoCoordinates: { lat: 40.7505, lng: -73.9934 },
         rating: 3,
         price: '₹2,800 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Hostel Central ${location}`)}`
       },
       {
         hotelName: `Economy Inn ${location}`,
         hotelAddress: `777 Value Blvd, ${location}`,
-        description: `Basic but comfortable rooms at wallet-friendly prices`,
+        description: `Basic but comfortable rooms at wallet-friendly prices in ${location}`,
         geoCoordinates: { lat: 40.7549, lng: -73.9840 },
         rating: 2,
         price: '₹3,200 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Economy Inn ${location}`)}`
       }
     ],
     moderate: [
@@ -160,25 +160,25 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7589, lng: -73.9851 },
         rating: 4,
         price: '₹7,800 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`City Center Inn ${location}`)}`
       },
       {
         hotelName: `Business Suites ${location}`,
         hotelAddress: `555 Corporate Plaza, ${location}`,
-        description: `Modern business hotel with conference facilities and high-speed internet`,
+        description: `Modern business hotel with conference facilities and high-speed internet in ${location}`,
         geoCoordinates: { lat: 40.7549, lng: -73.9840 },
         rating: 4,
         price: '₹9,200 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Business Suites ${location}`)}`
       },
       {
         hotelName: `Heritage Hotel ${location}`,
         hotelAddress: `222 Culture St, ${location}`,
-        description: `Charming hotel in a historic building with modern amenities`,
+        description: `Charming hotel in a historic building with modern amenities in ${location}`,
         geoCoordinates: { lat: 40.7282, lng: -74.0776 },
         rating: 4,
         price: '₹8,500 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Heritage Hotel ${location}`)}`
       }
     ],
     luxury: [
@@ -189,25 +189,25 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7128, lng: -74.0060 }, // Default coordinates
         rating: 5,
         price: '₹12,500 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Grand Hotel ${location}`)}`
       },
       {
         hotelName: `Seaside Resort ${location}`,
         hotelAddress: `789 Beach Blvd, ${location}`,
-        description: `Beautiful beachfront resort with stunning ocean views and water sports facilities`,
+        description: `Beautiful beachfront resort with stunning ocean views and water sports facilities in ${location}`,
         geoCoordinates: { lat: 40.7505, lng: -73.9934 },
         rating: 5,
         price: '₹16,200 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1611892440504-42a792e24d32?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Seaside Resort ${location}`)}`
       },
       {
         hotelName: `Palace Hotel ${location}`,
         hotelAddress: `999 Royal Way, ${location}`,
-        description: `Opulent accommodation with world-class spa, fine dining, and personalized butler service`,
+        description: `Opulent accommodation with world-class spa, fine dining, and personalized butler service in ${location}`,
         geoCoordinates: { lat: 40.7589, lng: -73.9851 },
         rating: 5,
         price: '₹22,500 per night',
-        hotelImageUrl: 'https://images.unsplash.com/photo-1566665797739-1674de7a421a?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'
+        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Palace Hotel ${location}`)}`
       }
     ]
   };

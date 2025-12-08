@@ -19,7 +19,7 @@ export const chatSession = model.startChat({
   history: [
     {
       role: "user",
-      parts: [{ text: "Generate a detailed Travel Plan for Location: Las Vegas, for 3 Days for Couple with a Cheap budget.\n\nProvide a JSON response with the following structure:\n\n1. HOTELS SECTION - Give me a list of hotel options with:\n   - HotelName: Hotel name\n   - HotelAddress: Full address\n   - Price: Price per night in ₹ (Indian Rupees)\n   - HotelImageUrl: URL to hotel image (or leave empty if not available)\n   - GeoCoordinates: { \"lat\": latitude, \"lng\": longitude }\n   - Rating: Rating out of 5\n   - Description: Brief description\n\n2. ITINERARY SECTION - Provide a detailed day-by-day plan with:\n   - For each day (Day 1, Day 2, etc.), include:\n     - Date: Date for the day\n     - Plan: Array of activities with:\n       - PlaceName: Place name\n       - PlaceDetails: Description of the place\n       - PlaceImageUrl: URL to place image (or leave empty if not available)\n       - GeoCoordinates: { \"lat\": latitude, \"lng\": longitude }\n       - TicketPricing: Entry fee or pricing info in ₹ (Indian Rupees)\n       - Rating: Rating out of 5\n       - TimeToVisit: Best time to visit this place\n       - TimeTravel: Estimated time to get there from previous location\n\nIMPORTANT INSTRUCTIONS:\n1. Use REAL, VALID geographic coordinates that exist on OpenStreetMap\n2. All pricing MUST be in Indian Rupees (₹)\n3. Provide EXACTLY 3 days of itinerary - NO MORE, NO LESS\n4. Include AT LEAST 4 activities per day\n5. Make sure the itinerary is logical and flows well geographically\n6. Respond ONLY with valid JSON - no extra text, no markdown code blocks\n7. NEVER return partial itineraries or placeholder messages like \"Hotel Recommendations Ready!\"\n8. ALWAYS generate a complete day-by-day itinerary with all required fields filled\n9. Each activity must have ALL fields filled (no empty values)\n10. Return ONLY the JSON object with hotels and itinerary sections and time date and everything." }],
+      parts: [{ text: "Generate a detailed Travel Plan for Location: Las Vegas, for 3 Days for Couple with a Cheap budget.\n\nProvide a JSON response with the following structure:\n\n1. HOTELS SECTION - Give me a list of hotel options with:\n   - HotelName: Hotel name\n   - HotelAddress: Full address\n   - Price: Price per night in ₹ (Indian Rupees)\n   - HotelImageUrl: URL to hotel image (or leave empty if not available)\n   - GeoCoordinates: { \"lat\": latitude, \"lng\": longitude }\n   - Rating: Rating out of 5\n   - Description\n\n2. ITINERARY SECTION - Provide a detailed day-by-day plan with:\n   - For each day (Day 1, Day 2, etc.), include:\n     - Date: Date for the day\n     - Plan: Array of activities with:\n       - PlaceName: Place name\n       - PlaceDetails: Description of the place\n       - PlaceImageUrl: URL to place image (or leave empty if not available)\n       - GeoCoordinates: { \"lat\": latitude, \"lng\": longitude }\n       - TicketPricing: Entry fee or pricing info in ₹ (Indian Rupees)\n       - Rating: Rating out of 5\n       - TimeToVisit: Best time to visit this place\n       - TimeTravel: Estimated time to get there from previous location\n\nIMPORTANT INSTRUCTIONS:\n1. Use REAL, VALID geographic coordinates that exist on OpenStreetMap\n2. All pricing MUST be in Indian Rupees (₹)\n3. Provide EXACTLY 3 days of itinerary - NO MORE, NO LESS\n4. Include AT LEAST 4 activities per day\n5. Make sure the itinerary is logical and flows well geographically\n6. Respond ONLY with valid JSON - no extra text, no markdown code blocks\n7. NEVER return partial itineraries or placeholder messages like \"Hotel Recommendations Ready!\"\n8. ALWAYS generate a complete day-by-day itinerary with all required fields filled\n9. Each activity must have ALL fields filled (no empty values)\n10. Return ONLY the JSON object with hotels and itinerary sections and time date and everything." }],
     },
     {
       role: "model",
@@ -70,9 +70,12 @@ export async function sendMessage(userMessage) {
   }
 }
 
-// Enhanced function to generate travel plan with real hotel data
+// Enhanced function to generate travel plan with real hotel data and comprehensive details
 export async function generateTravelPlanWithRealHotels(formData) {
   try {
+    // Check if this is a multi-destination trip
+    const isMultiDestination = formData.destinations && Array.isArray(formData.destinations) && formData.destinations.length > 1;
+    
     // Map budget IDs to tier names
     const budgetTiers = {
       1: 'cheap',
@@ -82,13 +85,107 @@ export async function generateTravelPlanWithRealHotels(formData) {
     
     const budgetTier = budgetTiers[formData.budget] || 'moderate';
     
-    // First, get real hotel data from OpenStreetMap with budget filtering
-    const realHotels = await searchHotelsNearLocation(formData.location.label, budgetTier);
+    // Get real hotel data from OpenStreetMap with budget filtering
+    // For multi-destination trips, we'll get hotels for the first destination as examples
+    const locationLabel = isMultiDestination 
+      ? formData.destinations.map(d => d.label).join(', ')
+      : formData.location.label;
+      
+    const realHotels = await searchHotelsNearLocation(
+      isMultiDestination ? formData.destinations[0].label : formData.location.label, 
+      budgetTier
+    );
     
-    // Create a prompt that encourages the AI to use real hotel data
-    const prompt = `Generate a detailed Travel Plan for Location: ${formData.location.label}, for ${formData.days} Days for ${getTravelerDescription(formData.travelers)} with a ${getBudgetDescription(formData.budget)} budget.
+    // Create a comprehensive prompt that encourages the AI to provide detailed information
+    const prompt = isMultiDestination
+      ? `Generate a comprehensive, detailed Multi-Destination Travel Plan for the following locations in sequence: ${locationLabel}, for ${formData.days} Days for ${getTravelerDescription(formData.travelers)} with a ${getBudgetDescription(formData.budget)} budget.
+      
+      Provide a detailed JSON response with the following structure:
+      
+      1. HOTELS SECTION - Give me a list of hotel options with:
+         - HotelName: Hotel name
+         - HotelAddress: Full address
+         - Price: Price per night in ₹ (Indian Rupees)
+         - HotelImageUrl: URL to hotel image (or leave empty if not available)
+         - GeoCoordinates: { "lat": latitude, "lng": longitude }
+         - Rating: Rating out of 5
+         - Description: Brief description including amenities and location benefits
+      
+      2. ITINERARY SECTION - Provide a comprehensive day-by-day plan with:
+         - For each day (Day 1, Day 2, etc.), include:
+           - Date: Specific date for the day
+           - Location: Current destination/city
+           - Plan: Array of activities with extensive details:
+             - PlaceName: Place name
+             - PlaceDetails: Comprehensive description including history, significance, and visitor experience
+             - PlaceImageUrl: URL to place image (or leave empty if not available)
+             - GeoCoordinates: { "lat": latitude, "lng": longitude }
+             - TicketPricing: Entry fee or pricing info in ₹ (Indian Rupees)
+             - Rating: Rating out of 5
+             - TimeToVisit: Best time to visit this place with seasonal considerations
+             - TimeTravel: Estimated time to get there from previous location with transport options
+             - BestTime: Optimal visiting hours (e.g., morning, afternoon, evening)
+             - Duration: Recommended time to spend (e.g., 2-3 hours)
+             - Category: Type of attraction (e.g., Museum, Landmark, Neighborhood)
+             - Accessibility: Accessibility information for visitors with disabilities
+             - Tips: Practical advice for visiting (booking, timing, what to bring)
+             - NearestTransport: Closest public transport options
+             - SeasonalConsiderations: Weather or seasonal factors affecting the visit
+             - BookingInfo: Information about reservations or tickets
+             - WhatToBring: Recommended items for the visit
+      
+      3. LOCAL INSIGHTS SECTION - Provide practical information for travelers:
+         - Weather: Seasonal weather patterns and packing suggestions
+         - Currency: Local currency and payment methods
+         - Language: Languages spoken and useful phrases
+         - Tipping: Tipping customs and expectations
+         - Safety: Safety concerns and precautions
+         - Transport: Public transport options and tips
+         - Cuisine: Local specialties and dining customs
+         - Customs: Cultural norms and etiquette
+      
+      4. EMERGENCY CONTACTS SECTION - Essential contact information:
+         - Police: Emergency number
+         - Ambulance: Medical emergency number
+         - TouristHelpline: Tourist information hotline
+      
+      IMPORTANT INSTRUCTIONS:
+      1. Use REAL, VALID geographic coordinates that exist on OpenStreetMap
+      2. All pricing MUST be in Indian Rupees (₹)
+      3. Provide EXACTLY ${formData.days} days of itinerary - NO MORE, NO LESS
+      4. Include AT LEAST 2-3 UNIQUE, detailed activities per day with comprehensive information
+      5. Make sure the itinerary flows logically geographically and temporally
+      6. Ensure each activity has ALL fields filled with specific, actionable information
+      7. Include practical tips and insider knowledge for each location
+      8. Provide realistic timing and travel durations between activities
+      9. Include accessibility information for inclusive travel planning
+      10. Add seasonal considerations for optimal timing of activities
+      11. For multi-destination trips:
+          - Include transit days with detailed travel information between cities
+          - Specify transportation modes, costs, and journey times
+          - Include check-in and orientation activities for new destinations
+          - Clearly indicate which destination is being visited on each day
+          - Provide destination-specific local insights
+          - Include practical information for each destination (weather, currency, etc.)
+      12. Respond ONLY with valid JSON - no extra text, no markdown code blocks
+      13. NEVER return partial itineraries or placeholder messages
+      14. ALWAYS generate a complete day-by-day itinerary with all required fields filled
+      15. Each activity must have ALL fields filled with specific, non-generic information
+      16. Avoid generic activities like 'City Center Exploration' - provide specific, meaningful experiences
+      17. Ensure activities are diverse and cover different aspects of each destination
+      18. Include seasonal and weather considerations for optimal timing
+      19. Add practical tips for each location (booking, timing, what to bring)
+      20. Include accessibility information for inclusive travel planning
+      
+      Here are some real hotels in the first destination that you MUST incorporate into your recommendations:
+      ${realHotels.map(hotel => 
+        `- ${hotel.hotelName}: ${hotel.description} (Rating: ${hotel.rating}/5, Price: ${hotel.price})`
+      ).join('\n')}
+      
+      Return ONLY the JSON object with hotels, itinerary, local insights, and emergency contacts sections.`
+      : `Generate a comprehensive, detailed Travel Plan for Location: ${formData.location.label}, for ${formData.days} Days for ${getTravelerDescription(formData.travelers)} with a ${getBudgetDescription(formData.budget)} budget.
 
-Provide a JSON response with the following structure:
+Provide a detailed JSON response with the following structure:
 
 1. HOTELS SECTION - Give me a list of hotel options with:
    - HotelName: Hotel name
@@ -97,46 +194,76 @@ Provide a JSON response with the following structure:
    - HotelImageUrl: URL to hotel image (or leave empty if not available)
    - GeoCoordinates: { "lat": latitude, "lng": longitude }
    - Rating: Rating out of 5
-   - Description: Brief description
+   - Description: Brief description including amenities and location benefits
 
-2. ITINERARY SECTION - Provide a detailed day-by-day plan with:
+2. ITINERARY SECTION - Provide a comprehensive day-by-day plan with:
    - For each day (Day 1, Day 2, etc.), include:
-     - Date: Date for the day
-     - Plan: Array of activities with:
+     - Date: Specific date for the day
+     - Plan: Array of activities with extensive details:
        - PlaceName: Place name
-       - PlaceDetails: Description of the place
+       - PlaceDetails: Comprehensive description including history, significance, and visitor experience
        - PlaceImageUrl: URL to place image (or leave empty if not available)
        - GeoCoordinates: { "lat": latitude, "lng": longitude }
        - TicketPricing: Entry fee or pricing info in ₹ (Indian Rupees)
        - Rating: Rating out of 5
-       - TimeToVisit: Best time to visit this place
-       - TimeTravel: Estimated time to get there from previous location
+       - TimeToVisit: Best time to visit this place with seasonal considerations
+       - TimeTravel: Estimated time to get there from previous location with transport options
+       - BestTime: Optimal visiting hours (e.g., morning, afternoon, evening)
+       - Duration: Recommended time to spend (e.g., 2-3 hours)
+       - Category: Type of attraction (e.g., Museum, Landmark, Neighborhood)
+       - Accessibility: Accessibility information for visitors with disabilities
+       - Tips: Practical advice for visiting (booking, timing, what to bring)
+       - NearestTransport: Closest public transport options
+       - SeasonalConsiderations: Weather or seasonal factors affecting the visit
+       - BookingInfo: Information about reservations or tickets
+       - WhatToBring: Recommended items for the visit
+
+3. LOCAL INSIGHTS SECTION - Provide practical information for travelers:
+   - Weather: Seasonal weather patterns and packing suggestions
+   - Currency: Local currency and payment methods
+   - Language: Languages spoken and useful phrases
+   - Tipping: Tipping customs and expectations
+   - Safety: Safety concerns and precautions
+   - Transport: Public transport options and tips
+   - Cuisine: Local specialties and dining customs
+   - Customs: Cultural norms and etiquette
+
+4. EMERGENCY CONTACTS SECTION - Essential contact information:
+   - Police: Emergency number
+   - Ambulance: Medical emergency number
+   - TouristHelpline: Tourist information hotline
 
 IMPORTANT INSTRUCTIONS:
 1. Use REAL, VALID geographic coordinates that exist on OpenStreetMap
 2. All pricing MUST be in Indian Rupees (₹)
 3. Provide EXACTLY ${formData.days} days of itinerary - NO MORE, NO LESS
-4. Include AT LEAST 4 UNIQUE activities per day with detailed information
-5. Make sure the itinerary is logical and flows well geographically
-6. Incorporate the real hotels I've provided below into your recommendations
-7. Respond ONLY with valid JSON - no extra text, no markdown code blocks
-8. NEVER return partial itineraries or placeholder messages like "Hotel Recommendations Ready!"
-9. ALWAYS generate a complete day-by-day itinerary with all required fields filled
-10. Each activity must have ALL fields filled (no empty values)
-11. Ensure each day has a coherent theme and logical progression of activities
-12. Include a good mix of activities (cultural, recreational, dining, scenic, etc.)
-13. CRITICALLY IMPORTANT: Each day MUST have UNIQUE activities - DO NOT REPEAT the same activities across different days
-14. Ensure activities are appropriate for the specified location (${formData.location.label}) and provide authentic local experiences
-15. For ALL destinations worldwide, create culturally relevant and geographically appropriate itineraries
-16. Avoid generic activities like "City Center Exploration" - instead provide specific, meaningful experiences
-17. Ensure activities are diverse and cover different aspects of the destination (history, culture, nature, cuisine, etc.)
+4. Include AT LEAST 3-4 UNIQUE, detailed activities per day with comprehensive information
+5. Make sure the itinerary flows logically geographically and temporally
+6. Ensure each activity has ALL fields filled with specific, actionable information
+7. Include practical tips and insider knowledge for each location
+8. Provide realistic timing and travel durations between activities
+9. Include accessibility information for inclusive travel planning
+10. Add seasonal considerations for optimal timing of activities
+11. Respond ONLY with valid JSON - no extra text, no markdown code blocks
+12. NEVER return partial itineraries or placeholder messages
+13. ALWAYS generate a complete day-by-day itinerary with all required fields filled
+14. Each activity must have ALL fields filled with specific, non-generic information
+15. Avoid generic activities like 'City Center Exploration' - provide specific, meaningful experiences
+16. Ensure activities are diverse and cover different aspects of the destination
+17. Include seasonal and weather considerations for optimal timing
+18. Add practical tips for each location (booking, timing, what to bring)
+19. Include accessibility information for inclusive travel planning
+20. Include emergency contact information
+21. Provide local insights
+22. Ensure all activities have image URLs where possible
+23. Include detailed descriptions for all hotels and activities
 
 Here are some real hotels in this location that you MUST incorporate into your recommendations:
 ${realHotels.map(hotel => 
   `- ${hotel.hotelName}: ${hotel.description} (Rating: ${hotel.rating}/5, Price: ${hotel.price})`
 ).join('\n')}
 
-Return ONLY the JSON object with hotels and itinerary sections.`;    
+Return ONLY the JSON object with hotels, itinerary, local insights, and emergency contacts sections.`;    
     let response;
     try {
       const result = await chatSession.sendMessage(prompt);

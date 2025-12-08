@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery, useMutation } from 'convex/react';
+import { api } from '../../../convex/_generated/api';
 import { useFetchTrips } from '@/hooks/useFetchTrips';
 import { useShareTrip } from '@/hooks/useShareTrip';
 import { motion } from 'framer-motion';
@@ -7,8 +9,30 @@ import { toast } from 'sonner';
 
 const TripHistory = () => {
   const navigate = useNavigate();
-  const { allTrips } = useFetchTrips();
   const { generateShareLink, copyToClipboard } = useShareTrip();
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+  
+  // Get user from localStorage
+  useEffect(() => {
+    const userData = localStorage.getItem('user');
+    if (userData) {
+      try {
+        const parsedUser = JSON.parse(userData);
+        setUser(parsedUser);
+      } catch (error) {
+        console.error('Error parsing user data:', error);
+      }
+    }
+    setIsLoading(false);
+  }, []);
+  
+  // Fetch trips only for the current user
+  const { allTrips } = useFetchTrips(user?._id || null);
+  
+  // Mutation for deleting trips (fixed: useMutation returns a function, not an array)
+  const deleteTrip = useMutation(api.trips.deleteTrip);
+  
   const [filteredTrips, setFilteredTrips] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filter, setFilter] = useState('all');
@@ -67,12 +91,67 @@ const TripHistory = () => {
     return travelers[travelersId - 1] || 'Unknown';
   };
 
+  // Function to handle trip deletion
+  const handleDeleteTrip = async (tripId, e) => {
+    e.stopPropagation();
+    
+    if (window.confirm('Are you sure you want to delete this trip? This action cannot be undone.')) {
+      try {
+        await deleteTrip({ tripId });
+        toast.success('Trip deleted successfully!');
+      } catch (error) {
+        console.error('Error deleting trip:', error);
+        toast.error('Failed to delete trip. Please try again.');
+      }
+    }
+  };
+
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50/30 via-white to-purple-50/30 p-4 md:p-8 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
+          <p className="mt-4 text-gray-600">Loading your trips...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show message if user is not logged in
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-blue-50/30 via-white to-purple-50/30 p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Trip History</h1>
+            <p className="text-gray-600">View and manage all your planned trips</p>
+          </div>
+          
+          <div className="text-center py-12">
+            <div className="bg-white/80 backdrop-blur-sm rounded-2xl shadow-lg p-8 max-w-md mx-auto border border-white/50">
+              <div className="text-5xl mb-4">🔒</div>
+              <h3 className="text-xl font-semibold text-gray-800 mb-2">Authentication Required</h3>
+              <p className="text-gray-600 mb-6">Please sign in to view your trip history.</p>
+              <button
+                onClick={() => navigate('/sign-up')}
+                className="bg-gradient-to-r from-blue-500 to-purple-500 text-white font-medium py-2 px-6 rounded-lg hover:shadow-md transition-all"
+              >
+                Sign In
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50/30 via-white to-purple-50/30 p-4 md:p-8">
       <div className="max-w-7xl mx-auto">
         <div className="mb-8 text-center">
-          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Trip History</h1>
-          <p className="text-gray-600">View and manage all your planned trips</p>
+          <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">My Trip History</h1>
+          <p className="text-gray-600">View and manage your planned trips</p>
         </div>
 
         {/* Search and Filter Controls */}
@@ -227,19 +306,30 @@ const TripHistory = () => {
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
                     </button>
-                    <button 
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSharingTripId(trip._id === sharingTripId ? null : trip._id);
-                        generateShareLink(trip._id);
-                      }}
-                      className="text-purple-600 hover:text-purple-800 font-medium flex items-center"
-                    >
-                      Share
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
-                      </svg>
-                    </button>
+                    <div className="flex space-x-2">
+                      <button 
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSharingTripId(trip._id === sharingTripId ? null : trip._id);
+                          generateShareLink(trip._id);
+                        }}
+                        className="text-purple-600 hover:text-purple-800 font-medium flex items-center"
+                      >
+                        Share
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+                        </svg>
+                      </button>
+                      <button 
+                        onClick={(e) => handleDeleteTrip(trip._id, e)}
+                        className="text-red-600 hover:text-red-800 font-medium flex items-center"
+                      >
+                        Delete
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
+                    </div>
                   </div>
                 </div>
               </motion.div>
