@@ -23,7 +23,10 @@ export const useSaveTrip = () => {
           },
           travelers: formData.travelers,
           days: formData.days,
-          budget: formData.budget
+          budget: formData.budget,
+          customBudget: formData.customBudget, // Add customBudget field
+          // Include needGuide field
+          needGuide: formData.needGuide || false
         },
         tripData: tripData,
         userEmail: userEmail,
@@ -37,16 +40,6 @@ export const useSaveTrip = () => {
       const tripId = await saveTrip(tripPayload);
       
       console.log("✅ Trip successfully saved to Convex with ID:", tripId);
-      console.log("📊 You can verify this data in the Convex dashboard at: https://dashboard.convex.dev");
-      
-      // Also log a reminder to check the dashboard
-      console.log("📋 To verify data storage:");
-      console.log("   1. Visit https://dashboard.convex.dev");
-      console.log("   2. Sign in to your Convex account");
-      console.log(`   3. Navigate to project: travelease-1aebc`);
-      console.log("   4. Click on the 'Data' tab");
-      console.log("   5. Look for the 'trips' table");
-      
       return tripId;
     } catch (error) {
       console.error("❌ Error saving trip to Convex:", error);

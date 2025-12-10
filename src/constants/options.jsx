@@ -33,19 +33,19 @@ export const SelectBudgetOptions = [
   {
     id: 1,
     title: 'Cheap',
-    desc: 'Stay conscious of costs',
+    desc: 'Stay conscious of costs (₹20,000 or less)',
     icon: '💰',
   },
   {
     id: 2,
     title: 'Moderate',
-    desc: 'Keep cost on the average side',
+    desc: 'Keep cost on the average side (₹20,000 - ₹50,000)',
     icon: '💲',
   },
   {
     id: 3,
     title: 'Luxury',
-    desc: 'Dont worry about cost',
+    desc: 'Dont worry about cost (₹50,000 and above)',
     icon: '💸',
   },
 ]

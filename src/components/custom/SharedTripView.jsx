@@ -193,12 +193,9 @@ const SharedTripView = () => {
                         <div key={placeIndex} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                           <div className="md:w-1/3 h-48 rounded-xl overflow-hidden">
                             <img 
-                              src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`} 
+                              src={place.placeImageUrl} 
                               alt={place.placeName || 'Place Image'}
                               className="w-full h-full object-cover"
-                              onError={(e) => { 
-                                e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
-                              }}
                             />
                           </div>
                           <div className="md:w-2/3">

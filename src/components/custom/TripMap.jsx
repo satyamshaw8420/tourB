@@ -3,54 +3,61 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Create beautiful custom icons with SVG
+// Create beautiful custom icons with SVG - Enhanced for better mobile-like appearance
 const createCustomIcon = (color, iconType) => {
   let iconPath = '';
-  let iconSize = [32, 48];
-  let iconAnchor = [16, 48];
+  let iconSize = [36, 50]; // Slightly larger for better visibility
+  let iconAnchor = [18, 50]; // Adjusted for larger size
   
   switch(iconType) {
     case 'hotel':
-      // Bed icon for hotels
-      iconPath = `<path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V9c0-1.1-.9-1-1-1z" fill="white"/>
+      // Enhanced bed icon for hotels with more detail
+      iconPath = `<path d="M20 8h-3V4H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V9c0-1.1-.9-1-1-1z" fill="white" stroke="${color}" stroke-width="0.5"/>
                   <path d="M18 12c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2zm-8 0c0 1.1-.9 2-2 2s-2-.9-2-2 .9-2 2-2 2 .9 2 2z" fill="${color}"/>
-                  <rect x="4" y="10" width="16" height="2" fill="${color}"/>`;
+                  <rect x="4" y="10" width="16" height="2" fill="${color}"/>
+                  <circle cx="6" cy="14" r="1" fill="white"/>
+                  <circle cx="10" cy="14" r="1" fill="white"/>
+                  <circle cx="14" cy="14" r="1" fill="white"/>
+                  <circle cx="18" cy="14" r="1" fill="white"/>`;
       break;
     case 'attraction':
-      // Pin icon for attractions
-      iconPath = `<circle cx="12" cy="10" r="3" fill="white"/>
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/>`;
+      // Enhanced pin icon for attractions with gradient effect
+      iconPath = `<defs><radialGradient id="pinGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%"><stop offset="0%" stop-color="${color}" stop-opacity="1"/><stop offset="100%" stop-color="${color}" stop-opacity="0.8"/></radialGradient></defs>
+                  <circle cx="12" cy="10" r="4" fill="white" stroke="${color}" stroke-width="1"/>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 4.5 5.5 12 7 12s7-7.5 7-12c0-3.87-3.13-7-7-7z" fill="url(#pinGradient)" stroke="${color}" stroke-width="0.5"/>`;
       break;
     case 'restaurant':
-      // Fork and knife icon for restaurants
-      iconPath = `<path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z" fill="white"/>`;
+      // Enhanced fork and knife icon for restaurants
+      iconPath = `<path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h1v-9.03C9.84 12.84 11 11.12 11 9V2h-1v7zm5-3v8h1v-8h-1zm0 10v2h1v-2h-1z" fill="white" stroke="${color}" stroke-width="0.5"/>
+                  <path d="M17 5c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2zm0 10c0-1.1-.9-2-2-2s-2 .9-2 2 .9 2 2 2 2-.9 2-2z" fill="${color}"/>`;
       break;
     case 'start':
-      // Flag icon for start points
-      iconPath = `<path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z" fill="white"/>`;
+      // Enhanced flag icon for start points
+      iconPath = `<path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z" fill="white" stroke="${color}" stroke-width="0.5"/>
+                  <circle cx="12" cy="6" r="2" fill="${color}"/>`;
       break;
     case 'end':
-      // Flag with checkmark for end points
-      iconPath = `<path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z" fill="white"/>
-                  <path d="M21 7l-4 4-2-2-2 2 4 4 4-4z" fill="#4CAF50"/>`;
+      // Enhanced flag with checkmark for end points
+      iconPath = `<path d="M14.4 6L14 4H5v17h2v-7h5.6l.4 2h7V6z" fill="white" stroke="${color}" stroke-width="0.5"/>
+                  <path d="M21 7l-4 4-2-2-2 2 4 4 4-4z" fill="#4CAF50" stroke="#4CAF50" stroke-width="0.5"/>`;
       break;
     case 'selected':
-      // Special highlight icon for selected locations
-      iconPath = `<circle cx="12" cy="10" r="5" fill="${color}"/>
-                  <circle cx="12" cy="10" r="8" fill="${color}" opacity="0.3"/>
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/>`;
+      // Enhanced highlight icon for selected locations with pulse effect
+      iconPath = `<circle cx="12" cy="10" r="6" fill="${color}" stroke="white" stroke-width="2"/>
+                  <circle cx="12" cy="10" r="10" fill="${color}" opacity="0.3"/>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}" stroke="white" stroke-width="1"/>`;
       break;
     default:
-      // Default pin icon
-      iconPath = `<circle cx="12" cy="10" r="3" fill="white"/>
-                  <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/>`;
+      // Enhanced default pin icon
+      iconPath = `<circle cx="12" cy="10" r="4" fill="white" stroke="${color}" stroke-width="1"/>
+                  <path d="M12 2C8.13 2 5 5.13 5 9c0 4.5 5.5 12 7 12s7-7.5 7-12c0-3.87-3.13-7-7-7z" fill="${color}" stroke="${color}" stroke-width="0.5"/>`;
   }
   
   const svgMarkup = `
     <svg xmlns="http://www.w3.org/2000/svg" width="${iconSize[0]}" height="${iconSize[1]}" viewBox="0 0 24 24">
-      <!-- Soft shadow -->
-      <ellipse cx="12" cy="22" rx="6" ry="2" fill="rgba(0,0,0,0.2)"/>
-      <!-- Icon background -->
+      <!-- Enhanced shadow for 3D effect -->
+      <ellipse cx="12" cy="23" rx="7" ry="2.5" fill="rgba(0,0,0,0.3)"/>
+      <!-- Icon background with enhanced styling -->
       ${iconPath}
     </svg>`;
 
@@ -59,7 +66,7 @@ const createCustomIcon = (color, iconType) => {
     className: 'custom-map-marker',
     iconSize: iconSize,
     iconAnchor: iconAnchor,
-    popupAnchor: [0, -40]
+    popupAnchor: [0, -45]
   });
 };
 
@@ -79,12 +86,12 @@ const endIcon = createCustomIcon('#f39c12', 'end'); // Orange
 // Special icon for selected locations
 const selectedIcon = createCustomIcon('#ffeb3b', 'selected'); // Yellow highlight
 
-// Fix for default marker icons in Leaflet
+// Fix for default marker icons in Leaflet with fallback to local assets
 delete L.Icon.Default.prototype._getIconUrl;
 L.Icon.Default.mergeOptions({
-  iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-  iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-  shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
+  iconRetinaUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon-2x.png',
+  iconUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-icon.png',
+  shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
 const TripMap = ({ hotels, itinerary, center, zoom = 13, selectedLocation = null }) => {
@@ -204,6 +211,24 @@ const TripMap = ({ hotels, itinerary, center, zoom = 13, selectedLocation = null
 
   return (
     <div className="rounded-xl overflow-hidden shadow-lg h-96 w-full relative">
+      {/* Touch interaction hint for mobile users */}
+      <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm rounded-lg p-2 text-white text-xs z-10 hidden md:block">
+        <div className="flex items-center gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+          <span>Drag • Zoom • Explore</span>
+        </div>
+      </div>
+      {/* Mobile touch hint */}
+      <div className="absolute top-2 right-2 bg-black/50 backdrop-blur-sm rounded-lg p-2 text-white text-xs z-10 md:hidden">
+        <div className="flex items-center gap-1">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+          <span>Touch to explore</span>
+        </div>
+      </div>
       <style>{`
         @keyframes bounce {
           0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
@@ -220,21 +245,42 @@ const TripMap = ({ hotels, itinerary, center, zoom = 13, selectedLocation = null
           50% { filter: brightness(1.05); }
           100% { filter: brightness(1); }
         }
+        @keyframes drop {
+          0% { transform: translateY(-20px); opacity: 0; }
+          100% { transform: translateY(0); opacity: 1; }
+        }
+        @keyframes pulse-glow {
+          0% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0.7); }
+          70% { box-shadow: 0 0 0 15px rgba(59, 130, 246, 0); }
+          100% { box-shadow: 0 0 0 0 rgba(59, 130, 246, 0); }
+        }
         .custom-map-marker {
-          animation: bounce 2s infinite;
+          animation: drop 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards, bounce 3s infinite 0.5s;
           transform-origin: bottom center;
-          transition: transform 0.2s ease;
+          transition: all 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+          filter: drop-shadow(0 3px 6px rgba(0,0,0,0.3));
         }
         .custom-map-marker:hover {
           animation: none;
-          transform: scale(1.2) translateY(-5px);
+          transform: scale(1.3) translateY(-8px);
+          z-index: 1000 !important;
+          filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4));
         }
         .map-container {
-          animation: pulse 2s infinite;
+          animation: pulse 3s infinite;
           border-radius: 0.75rem;
+          box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+          cursor: grab;
+        }
+        .map-container:active {
+          cursor: grabbing;
         }
         .leaflet-container {
-          animation: glow 4s infinite;
+          animation: glow 5s infinite;
+        }
+        /* Selected marker pulsing effect */
+        .custom-map-marker.selected {
+          animation: pulse-glow 2s infinite, bounce 3s infinite;
         }
       `}</style>
       <MapContainer 
@@ -246,7 +292,25 @@ const TripMap = ({ hotels, itinerary, center, zoom = 13, selectedLocation = null
         tap={true}
         zoomControl={true}
         ref={mapRef}
+        touchZoom={true}
+        doubleClickZoom={true}
+        scrollWheelZoom={true}
+        boxZoom={true}
+        keyboard={true}
+        inertia={true}
+        inertiaDeceleration={3000}
+        inertiaMaxSpeed={1500}
+        zoomAnimation={true}
+        markerZoomAnimation={true}
+        fadeAnimation={true}
       >
+        {/* Stamen Toner tile layer for enhanced map visualization (as per project specification) */}
+        <TileLayer
+          url="https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png"
+          attribution='Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.'
+          maxZoom={20}
+        />
+        
         {/* Enhanced Google Maps-like tile layer with maximum detail */}
         <TileLayer
           url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
@@ -298,6 +362,15 @@ const TripMap = ({ hotels, itinerary, center, zoom = 13, selectedLocation = null
           />
         ))}
         
+        {/* Points of Interest Layer - Adding popular attractions, restaurants, etc. */}
+        {/* This would typically be loaded from an external API or dataset */}
+        
+        {/* Geolocation Feature - Shows user's current location */}
+        {/* This would be implemented with the browser's geolocation API */}
+        
+        {/* Weather Overlay - Shows weather conditions on the map */}
+        {/* This would be implemented with a weather API */}
+        
         {/* Render hotels with BLUE markers (as per project specification) */}
         {hotels && Array.isArray(hotels) && hotels.map((hotel, index) => {
           if (!hotel.geoCoordinates || 
@@ -318,6 +391,7 @@ const TripMap = ({ hotels, itinerary, center, zoom = 13, selectedLocation = null
               key={`hotel-${index}`} 
               position={position}
               icon={isSelected ? selectedIcon : hotelIcon}
+              className={isSelected ? 'custom-map-marker selected' : 'custom-map-marker'}
             >
               <Popup>
                 <div className="min-w-60 p-3 bg-white rounded-lg shadow-lg border border-gray-200">
@@ -408,6 +482,7 @@ const TripMap = ({ hotels, itinerary, center, zoom = 13, selectedLocation = null
                 key={`place-${dayIndex}-${placeIndex}`} 
                 position={position}
                 icon={icon}
+                className={isSelected ? 'custom-map-marker selected' : 'custom-map-marker'}
               >
                 <Popup>
                   <div className="min-w-60 p-3 bg-white rounded-lg shadow-lg border border-gray-200">

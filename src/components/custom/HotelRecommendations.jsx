@@ -42,12 +42,9 @@ const HotelRecommendations = ({ hotels, destination }) => {
           <div key={index} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="h-48 overflow-hidden">
               <img 
-                src={hotel.hotelImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`} 
+                src={hotel.hotelImageUrl} 
                 alt={hotel.hotelName || 'Hotel Image'}
                 className="w-full h-full object-cover"
-                onError={(e) => { 
-                  e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`;
-                }}
               />
             </div>
             <div className="p-6">

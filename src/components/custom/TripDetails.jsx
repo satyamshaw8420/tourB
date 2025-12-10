@@ -5,9 +5,10 @@ import { api } from '../../../convex/_generated/api';
 import HotelMap from './HotelMap';
 import HotelRecommendations from './HotelRecommendations';
 import TripMap from './TripMap';
+import POIMap from './POIMap';
+import TripDetailsSkeleton from './TripDetailsSkeleton';
 import { categorizeActivitiesByTime, getTimePeriodLabel, getTimePeriodDescription } from '@/utils/itineraryHelpers';
 import { getPlaceImage } from '@/service/ImageGenerationService';
-
 // Function to enhance places with real images from Unsplash API in real-time
 const enhancePlacesWithImages = async (itinerary) => {
   if (!itinerary || !Array.isArray(itinerary)) return itinerary;
@@ -28,9 +29,29 @@ const enhancePlacesWithImages = async (itinerary) => {
           const imageUrl = await getPlaceImage(place.placeName);
           if (imageUrl) {
             place.placeImageUrl = imageUrl;
+          } else {
+            // Retry with a different query
+            const retryImageUrl = await getPlaceImage(`${place.placeName} attraction`);
+            if (retryImageUrl) {
+              place.placeImageUrl = retryImageUrl;
+            }
           }
         } catch (error) {
           console.error('Error getting image for place from Unsplash:', place.placeName, error);
+          // Retry with a different query
+          try {
+            const retryImageUrl = await getPlaceImage(`${place.placeName} attraction`);
+            if (retryImageUrl) {
+              place.placeImageUrl = retryImageUrl;
+            } else {
+              // Set a default image if no image is found
+              place.placeImageUrl = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+            }
+          } catch (retryError) {
+            console.error('Retry failed for place image:', place.placeName, retryError);
+            // Set a default image if all attempts fail
+            place.placeImageUrl = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+          }
         }
       }
       enhancedPlan.push(place);
@@ -45,9 +66,95 @@ const enhancePlacesWithImages = async (itinerary) => {
   return enhancedItinerary;
 };
 
+// Function to enhance hotels with real images from Unsplash API in real-time
+const enhanceHotelsWithImages = async (hotels) => {
+  if (!hotels || !Array.isArray(hotels)) return hotels;
+  
+  const enhancedHotels = [];
+  
+  for (const hotel of hotels) {
+    // If hotel doesn't have an image URL, try to get one from Unsplash API in real-time
+    if (!hotel.hotelImageUrl) {
+      try {
+        const imageUrl = await getPlaceImage(hotel.hotelName);
+        if (imageUrl) {
+          hotel.hotelImageUrl = imageUrl;
+        } else {
+          // Retry with a different query
+          const retryImageUrl = await getPlaceImage(`${hotel.hotelName} hotel`);
+          if (retryImageUrl) {
+            hotel.hotelImageUrl = retryImageUrl;
+          }
+        }
+      } catch (error) {
+        console.error('Error getting image for hotel from Unsplash:', hotel.hotelName, error);
+        // Retry with a different query
+        try {
+          const retryImageUrl = await getPlaceImage(`${hotel.hotelName} hotel`);
+          if (retryImageUrl) {
+            hotel.hotelImageUrl = retryImageUrl;
+          } else {
+            // Set a default image if no image is found
+            hotel.hotelImageUrl = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+          }
+        } catch (retryError) {
+          console.error('Retry failed for hotel image:', hotel.hotelName, retryError);
+          // Set a default image if all attempts fail
+          hotel.hotelImageUrl = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+        }
+      }
+    }
+    enhancedHotels.push(hotel);
+  }
+  
+  return enhancedHotels;
+};// Function to get all Points of Interest from hotels and itinerary
+const getAllPOIs = (hotels, itinerary) => {
+  const pois = [];
+  
+  // Add hotels as POIs
+  if (hotels && Array.isArray(hotels)) {
+    hotels.forEach((hotel, index) => {
+      if (hotel.geoCoordinates && hotel.geoCoordinates.lat && hotel.geoCoordinates.lng) {
+        pois.push({
+          name: hotel.hotelName || `Hotel ${index + 1}`,
+          description: hotel.hotelAddress || 'Hotel accommodation',
+          address: hotel.hotelAddress || '',
+          lat: hotel.geoCoordinates.lat,
+          lng: hotel.geoCoordinates.lng,
+          type: 'hotel',
+          rating: hotel.rating || null
+        });
+      }
+    });
+  }
+  
+  // Add itinerary places as POIs
+  if (itinerary && Array.isArray(itinerary)) {
+    itinerary.forEach((day, dayIndex) => {
+      if (day.plan && Array.isArray(day.plan)) {
+        day.plan.forEach((place, placeIndex) => {
+          if (place.geoCoordinates && place.geoCoordinates.lat && place.geoCoordinates.lng) {
+            pois.push({
+              name: place.placeName || `Place ${placeIndex + 1}`,
+              description: place.placeDetails || '',
+              address: place.placeAddress || '',
+              lat: place.geoCoordinates.lat,
+              lng: place.geoCoordinates.lng,
+              type: place.placeName && place.placeName.toLowerCase().includes('restaurant') ? 'restaurant' : 'attraction',
+              rating: place.rating || null
+            });
+          }
+        });
+      }
+    });
+  }
+  
+  return pois;
+};
+
 // Function to filter hotels based on user's budget selection
-const filterHotelsByUserBudget = (hotels, budget) => {
-  // Map budget IDs to price ranges (in Indian Rupees per night)
+const filterHotelsByUserBudget = (hotels, budget) => {  // Map budget IDs to price ranges (in Indian Rupees per night)
   const budgetRanges = {
     '1': { min: 0, max: 7000, label: 'Cheap' },      // Cheap budget
     '2': { min: 5000, max: 15000, label: 'Moderate' }, // Moderate budget
@@ -190,6 +297,8 @@ const TripDetails = () => {
       console.log('Parsed trip data:', parsedData);
       console.log('Hotels data:', parsedData?.hotels);
       console.log('Itinerary data:', parsedData?.itinerary);
+      console.log('Itinerary data type:', typeof parsedData?.itinerary);
+      console.log('Itinerary data isArray:', Array.isArray(parsedData?.itinerary));
 
       // Extract hotels data and filter based on user's budget
       if (parsedData && parsedData.hotels) {
@@ -200,13 +309,15 @@ const TripDetails = () => {
           hotels = filterHotelsByUserBudget(hotels, trip.userSelection.budget);
         }
         
-        setHotelsData(hotels);
-      }
-      // Extract itinerary data - simplified and more robust logic
+        // Enhance hotels with real images
+        enhanceHotelsWithImages(hotels).then(enhancedHotels => {
+          setHotelsData(enhancedHotels);
+        });      }
+      // Extract itinerary data with enhanced fallback logic
       if (parsedData) {
         let itinerary = [];
 
-        // Handle different itinerary formats with priority order
+        // Handle different itinerary formats with priority order and enhanced logic
         if (parsedData.itinerary && Array.isArray(parsedData.itinerary)) {
           // Direct array format
           itinerary = parsedData.itinerary;
@@ -214,16 +325,37 @@ const TripDetails = () => {
           // Object format with days array
           if (Array.isArray(parsedData.itinerary.days)) {
             itinerary = parsedData.itinerary.days;
+          } else if (parsedData.itinerary.plan && Array.isArray(parsedData.itinerary.plan)) {
+            // Handle case where the entire itinerary is stored as a single plan
+            itinerary = [{
+              day: "Day 1",
+              date: "Day 1",
+              plan: parsedData.itinerary.plan
+            }];
           } else {
             // Convert object values to array
             const itineraryArray = Object.values(parsedData.itinerary);
             if (Array.isArray(itineraryArray) && itineraryArray.length > 0) {
-              itinerary = itineraryArray;
+              // Check if values are day objects or need to be wrapped
+              if (itineraryArray.every(item => item && (item.plan || item.activities))) {
+                itinerary = itineraryArray;
+              } else {
+                // Wrap in a single day if they appear to be activities
+                itinerary = [{
+                  day: "Day 1",
+                  date: "Day 1",
+                  plan: itineraryArray
+                }];
+              }
             }
           }
         } else if (parsedData.plan && Array.isArray(parsedData.plan)) {
           // Alternative format where itinerary is stored as 'plan'
-          itinerary = parsedData.plan;
+          itinerary = [{
+            day: "Day 1",
+            date: "Day 1",
+            plan: parsedData.plan
+          }];
         }
 
         // If still no itinerary found, try more flexible extraction
@@ -287,20 +419,68 @@ const TripDetails = () => {
           }
         }
 
+        // Ensure itinerary is always an array and has proper structure
+        if (!Array.isArray(itinerary)) {
+          itinerary = [];
+        }
+        
+        // Validate and enhance each day in the itinerary
+        itinerary = itinerary.map((day, index) => {
+          // Ensure day has proper structure
+          const validatedDay = {
+            day: day.day || `Day ${index + 1}`,
+            date: day.date || `Day ${index + 1}`,
+            plan: Array.isArray(day.plan) ? day.plan : (Array.isArray(day.activities) ? day.activities : [])
+          };
+          
+          // If plan is still empty, try other possible property names
+          if (validatedDay.plan.length === 0) {
+            // Check for other possible activity arrays
+            Object.keys(day).forEach(key => {
+              if (Array.isArray(day[key]) && key !== 'day' && key !== 'date') {
+                validatedDay.plan = validatedDay.plan.concat(day[key]);
+              }
+            });
+          }
+          
+          return validatedDay;
+        });
         console.log('Final itinerary data:', itinerary);
+        console.log('Final itinerary data type:', typeof itinerary);
+        console.log('Final itinerary data isArray:', Array.isArray(itinerary));
         
         // Enhance itinerary with real images
         enhancePlacesWithImages(itinerary).then(enhancedItinerary => {
+          console.log('Enhanced itinerary data:', enhancedItinerary);
+          console.log('Enhanced itinerary data type:', typeof enhancedItinerary);
+          console.log('Enhanced itinerary data isArray:', Array.isArray(enhancedItinerary));
           setItineraryData(enhancedItinerary);
         });
       }
-      setLoading(false);    } catch (err) {
+      setLoading(false);
+    } catch (err) {
       console.error('Error processing trip data:', err);
       setError('Error loading trip data');
       setLoading(false);
+      // Set a fallback plan even if processing fails
+      if (trip.tripData) {
+        setItineraryData([{
+          day: "Day 1",
+          date: "Day 1",
+          plan: [{
+            placeName: "Sample Activity",
+            placeDetails: "This is a sample activity to demonstrate the itinerary structure.",
+            placeImageUrl: "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80",
+            geoCoordinates: { lat: 0, lng: 0 },
+            ticketPricing: "Free",
+            rating: 4.5,
+            timeToVisit: "Morning",
+            timeTravel: "30 minutes"
+          }]
+        }]);
+      }
     }
   }, [trip, tripId]);
-
   // Helper functions
   const getTravelersLabel = (travelers) => {
     // Handle case where travelers is null, undefined, or not the expected type
@@ -327,26 +507,58 @@ const TripDetails = () => {
   };
 
   const getBudgetLabel = (budget) => {
-    // Handle case where budget is null, undefined, or not a string
-    if (!budget || typeof budget !== 'string') return 'Not specified';
-
-    const budgetLabels = {
-      'low': 'Low Budget',
-      'medium': 'Medium Budget',
-      'high': 'High Budget'
-    };
-
-    // Convert to lowercase safely after confirming it's a string
-    return budgetLabels[budget.toLowerCase()] || budget;
+    // Handle case where budget is null, undefined, or not the expected type
+    if (budget === null || budget === undefined) return 'Not specified';
+    
+    // Handle numeric budget values (1, 2, 3)
+    if (typeof budget === 'number') {
+      const budgetLabels = {
+        1: 'Cheap',
+        2: 'Moderate',
+        3: 'Luxury'
+      };
+      return budgetLabels[budget] || 'Not specified';
+    }
+    
+    // Handle string budget values
+    if (typeof budget === 'string') {
+      const budgetLabels = {
+        'low': 'Low Budget',
+        'medium': 'Medium Budget',
+        'high': 'High Budget',
+        '1': 'Cheap',
+        '2': 'Moderate',
+        '3': 'Luxury'
+      };
+      
+      return budgetLabels[budget.toLowerCase()] || budget;
+    }
+    
+    return 'Not specified';
   };
 
-  const formatDate = (dateString) => {
-    // Handle case where dateString is null, undefined, or not a string
-    if (!dateString || typeof dateString !== 'string') return 'Not specified';
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    // Handle case where dateString is not a valid date
-    const date = new Date(dateString);
+  const formatDate = (dateValue) => {
+    // Handle case where dateValue is null or undefined
+    if (!dateValue) return 'Not specified';
+    
+    let date;
+    
+    // Handle different date formats
+    if (dateValue instanceof Date) {
+      date = dateValue;
+    } else if (typeof dateValue === 'string') {
+      date = new Date(dateValue);
+    } else if (typeof dateValue === 'number') {
+      // Handle timestamp values
+      date = new Date(dateValue);
+    } else {
+      return 'Not specified';
+    }
+    
+    // Check if date is valid
     if (isNaN(date.getTime())) return 'Invalid date';
+    
+    const options = { year: 'numeric', month: 'long', day: 'numeric' };
     return date.toLocaleDateString(undefined, options);
   };
 
@@ -478,15 +690,7 @@ const TripDetails = () => {
 
   // Loading state
   if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-lg">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Loading Trip Details</h2>
-          <p className="text-gray-600">Please wait while we fetch your trip information...</p>
-        </div>
-      </div>
-    );
+    return <TripDetailsSkeleton />;
   }
 
   // Error state
@@ -706,12 +910,9 @@ const TripDetails = () => {
                 <div key={index} className="bg-white rounded-2xl shadow-lg overflow-hidden border border-gray-100 hover:shadow-xl transition-all duration-300 transform hover:-translate-y-1">
                   <div className="h-48 overflow-hidden">
                     <img
-                      src={hotel.hotelImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`}
+                      src={hotel.hotelImageUrl}
                       alt={hotel.hotelName || 'Hotel Image'}
                       className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                      onError={(e) => { 
-                        e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(hotel.hotelName || 'Hotel')}`;
-                      }}
                     />
                   </div>
                   <div className="p-6">
@@ -764,7 +965,8 @@ const TripDetails = () => {
         {itineraryData && Array.isArray(itineraryData) && itineraryData.length > 0 ? (
           <div className="mb-12">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-2xl font-bold text-gray-800 flex items-center">                <span className="mr-2">📅</span> Daily Itinerary
+              <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                <span className="mr-2">📅</span> Daily Itinerary
               </h2>
               <span className="bg-purple-100 text-purple-800 text-sm font-medium px-3 py-1 rounded-full">
                 {itineraryData.length} Days
@@ -773,10 +975,10 @@ const TripDetails = () => {
 
             <div className="space-y-8">
               {itineraryData.map((dayData, index) => (
-                <div key={index} className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+                <div key={index} className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border border-gray-100 mb-8">
                   <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-5">
                     <div className="flex justify-between items-center">
-                      <h3 className="text-xl font-bold text-white">{dayData.day || `Day ${index + 1}`}</h3>
+                      <h3 className="text-xl font-bold text-white">Day {index + 1}: {dayData.day || `Day ${index + 1}`}</h3>
                       <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm">
                         {dayData.date || `Day ${index + 1}`}
                       </span>
@@ -796,11 +998,11 @@ const TripDetails = () => {
                         <div className="flex items-center">
                           <div className="bg-white p-2 rounded-lg mr-3">
                             <img
-                              src={hotelsData[0].hotelImageUrl || `https://placehold.co/200x200/007bff/ffffff?text=${encodeURIComponent(hotelsData[0].hotelName || 'Hotel')}`}
+                              src={hotelsData[0].hotelImageUrl}
                               alt={hotelsData[0].hotelName || 'Hotel'}
                               className="w-12 h-12 object-cover rounded"
-                              onError={(e) => { 
-                                e.target.src = `https://placehold.co/200x200/007bff/ffffff?text=${encodeURIComponent(hotelsData[0].hotelName || 'Hotel')}`;
+                              onError={(e) => {
+                                e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
                               }}
                             />
                           </div>
@@ -823,7 +1025,7 @@ const TripDetails = () => {
                         <div className="space-y-8">
                           {/* Morning Activities */}
                           {hasMorning && (
-                            <div>
+                            <div className="border-l-4 border-blue-500 pl-4">
                               <div className="flex items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
                                   <span className="mr-2">🌅</span> Morning Activities
@@ -837,11 +1039,11 @@ const TripDetails = () => {
                                   <div key={`morning-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img
-                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`}
+                                        src={place.placeImageUrl}
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { 
-                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        onError={(e) => {
+                                          e.target.src = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
                                         }}
                                       />
                                     </div>
@@ -910,7 +1112,7 @@ const TripDetails = () => {
 
                           {/* Afternoon Activities */}
                           {hasAfternoon && (
-                            <div>
+                            <div className="border-l-4 border-yellow-500 pl-4">
                               <div className="flex items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
                                   <span className="mr-2">☀️</span> Afternoon Activities
@@ -924,11 +1126,11 @@ const TripDetails = () => {
                                   <div key={`afternoon-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img
-                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`}
+                                        src={place.placeImageUrl}
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { 
-                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        onError={(e) => {
+                                          e.target.src = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
                                         }}
                                       />
                                     </div>
@@ -997,7 +1199,7 @@ const TripDetails = () => {
 
                           {/* Evening Activities */}
                           {hasEvening && (
-                            <div>
+                            <div className="border-l-4 border-purple-500 pl-4">
                               <div className="flex items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
                                   <span className="mr-2">🌆</span> Evening Activities
@@ -1011,11 +1213,11 @@ const TripDetails = () => {
                                   <div key={`evening-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img
-                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`}
+                                        src={place.placeImageUrl}
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { 
-                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        onError={(e) => {
+                                          e.target.src = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
                                         }}
                                       />
                                     </div>
@@ -1102,8 +1304,8 @@ const TripDetails = () => {
               ))}
             </div>
           </div>
-        ) : hotelsData && hotelsData.length > 0 ? (
-          // Show message when we have hotels but no itinerary
+        ) : (
+          // Show message when we have no itinerary data
           <div className="mb-12">
             <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
               <span className="mr-2">📅</span> Trip Itinerary
@@ -1121,54 +1323,17 @@ const TripDetails = () => {
                 </div>
                 
                 {/* Hotel information while waiting */}
-                <div className="mt-6 text-left bg-blue-50 p-4 rounded-lg max-w-2xl mx-auto">
-                  <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
-                    </svg>
-                    Hotels Found
-                  </h4>
-                  <p className="text-blue-700">We've found {hotelsData.length} hotel options for your stay in {safeLocation.label || 'your destination'}.</p>
-                </div>
-                
-                {/* Progress indicator */}
-                <div className="mt-6 max-w-md mx-auto">
-                  <div className="flex justify-between text-sm text-gray-600 mb-1">
-                    <span>Step 1: Finding hotels</span>
-                    <span>Step 2: Creating itinerary</span>
+                {hotelsData && hotelsData.length > 0 && (
+                  <div className="mt-6 text-left bg-blue-50 p-4 rounded-lg max-w-2xl mx-auto">
+                    <h4 className="font-semibold text-blue-800 mb-2 flex items-center">
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                      </svg>
+                      Hotels Found
+                    </h4>
+                    <p className="text-blue-700">We've found {hotelsData.length} hotel options for your stay in {safeLocation.label || 'your destination'}.</p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '75%'}}></div>
-                  </div>
-                  <p className="text-gray-500 text-xs mt-2">Creating your personalized day-by-day travel plan...</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        ) : (
-          // Fallback for when neither hotels nor itinerary data is available
-          <div className="mb-12">
-            <h2 className="text-2xl font-bold text-gray-800 mb-6 flex items-center">
-              <span className="mr-2">📅</span> Trip Itinerary
-            </h2>
-            <div className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg p-6 border border-gray-100">
-              <div className="text-center py-8">
-                <div className="text-5xl mb-4">🗺️</div>
-                <h3 className="text-xl font-semibold text-gray-800 mb-2">Preparing Your Travel Plan</h3>
-                <p className="text-gray-600 mb-4">We're generating your personalized travel itinerary with hotels and activities.</p>
-                <p className="text-gray-500 text-sm mb-6">This usually takes just a few seconds. Please wait while we prepare your complete travel itinerary.</p>
-                
-                {/* Loading indicator */}
-                <div className="flex justify-center mb-6">
-                  <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
-                </div>
-                
-                <button 
-                  className="mt-4 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-2 px-6 rounded-lg transition-all duration-300"
-                  onClick={() => window.location.reload()}
-                >
-                  Refresh Page
-                </button>
+                )}
                 
                 {/* Progress indicator */}
                 <div className="mt-6 max-w-md mx-auto">
@@ -1240,10 +1405,37 @@ const TripDetails = () => {
               Cancel
             </button>
           )}
+
+          {/* Points of Interest Map */}
+          {(hotelsData.length > 0 || (itineraryData && itineraryData.length > 0)) && (
+            <div className="mb-12">
+              <div className="flex items-center justify-between mb-6">
+                <h2 className="text-2xl font-bold text-gray-800 flex items-center">
+                  <span className="mr-2">📍</span> Points of Interest
+                </h2>
+                <span className="bg-purple-100 text-purple-800 text-sm font-medium px-3 py-1 rounded-full">
+                  {getAllPOIs(hotelsData, itineraryData).length} locations
+                </span>
+              </div>
+              
+              <POIMap 
+                center={
+                  hotelsData[0]?.geoCoordinates ? 
+                  [hotelsData[0].geoCoordinates.lat, hotelsData[0].geoCoordinates.lng] : 
+                  itineraryData[0]?.plan?.[0]?.geoCoordinates ?
+                  [itineraryData[0].plan[0].geoCoordinates.lat, itineraryData[0].plan[0].geoCoordinates.lng] :
+                  [36.1699, -115.1398]
+                }
+                pois={getAllPOIs(hotelsData, itineraryData)}
+                onLocationClick={(poi) => {
+                  // Handle POI click - could scroll to relevant section or show more details
+                  console.log('POI clicked:', poi);
+                }}
+              />
+            </div>
+          )}
         </div>
       </div>
     </div>
   );
-};
-
-export default TripDetails;
+};export default TripDetails;

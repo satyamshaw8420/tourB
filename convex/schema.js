@@ -1,6 +1,9 @@
 import { defineSchema, defineTable } from "convex/server";
 import { v } from "convex/values";
 
+// Force full redeployment: 2025-12-09 18:00
+// Explicitly defining needGuide field in schema with comment
+
 export default defineSchema({
   // Main trips table storing all trip information
   trips: defineTable({
@@ -12,6 +15,11 @@ export default defineSchema({
       travelers: v.union(v.number(), v.null()),
       days: v.string(),
       budget: v.union(v.number(), v.null()),
+      // Add needGuide field to the schema with explicit validation
+      // This field indicates whether the user wants to hire a local guide
+      needGuide: v.optional(v.boolean()),
+      // Add customBudget field to store manual budget input
+      customBudget: v.optional(v.string()),
       // Additional fields that may be present
       numberOfMembers: v.optional(v.number()),
       startDate: v.optional(v.string()),

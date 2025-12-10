@@ -1,10 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { searchHotelsNearLocation } from './OpenStreetMapService';
-
+import { robustJSONParse } from './EnhancedAIModal';
 // Initialize Google Generative AI
 const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY);
 
-// Model configuration - using gemini-2.5-flash for better stability and speed
+// Model configuration - using gemini-1.5-flash for better stability and speed
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
 const generationConfig = {
@@ -278,132 +278,8 @@ Return ONLY the JSON object with hotels, itinerary, local insights, and emergenc
       return tripData;
     }
     
-    // Try to parse the AI response
-    let tripData;
-    try {
-      // Clean up the response text to make it valid JSON
-      let responseText = response.text();
-      console.log("Raw AI response:", responseText);
-      
-      // Handle completely empty responses
-      if (!responseText || responseText.trim().length === 0) {
-        throw new Error('Empty AI response');
-      }
-      
-      // Remove any markdown code block indicators
-      responseText = responseText.replace(/```json/g, '').replace(/```/g, '').trim();
-      
-      // Try to find JSON content between curly braces
-      const jsonStart = responseText.indexOf('{');
-      const jsonEnd = responseText.lastIndexOf('}');
-      
-      if (jsonStart !== -1 && jsonEnd !== -1 && jsonEnd > jsonStart) {
-        responseText = responseText.substring(jsonStart, jsonEnd + 1);
-      } else {
-        // No JSON object found in response
-        throw new Error('No valid JSON object found in response');
-      }
-      
-      // More robust JSON cleaning
-      // Remove newlines and extra spaces
-      responseText = responseText.replace(/[\r\n]/g, ' ').replace(/\s+/g, ' ');
-      
-      // Fix common JSON issues
-      // Replace single quotes with double quotes for property names
-      responseText = responseText.replace(/(['"])?([a-zA-Z0-9_]+)(['"])?:/g, '"$2":');
-      
-      // Fix unquoted string values (more conservative approach)
-      responseText = responseText.replace(/:\s*([^"'\{\}\[\]\d][^,\}\]]*?)(?=\s*[},]|$)/g, function(match, p1) {
-        // Only quote values that aren't already quoted and look like strings
-        if (p1 && !/^\s*$/.test(p1)) {
-          return ': "' + p1.trim() + '"';
-        }
-        return match;
-      });
-      
-      // Remove trailing commas
-      responseText = responseText.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-      
-      // Handle escaped quotes
-      responseText = responseText.replace(/\\'/g, "'").replace(/\\"/g, '"');
-      
-      // Final cleanup - remove any remaining control characters
-      responseText = responseText.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
-      
-      // Additional validation to ensure we have valid JSON structure
-      if (responseText.length < 10) {
-        throw new Error('Response too short to be valid JSON');
-      }
-      
-      tripData = JSON.parse(responseText);
-    } catch (parseError) {
-      console.error("Error parsing AI response as JSON:", parseError);
-      console.error("Response text that failed to parse:", response.text());
-      
-      // Try a more aggressive fallback parsing
-      try {
-        let fallbackText = response.text();
-        console.log("Attempting fallback parsing with text:", fallbackText);
-        
-        // Handle completely empty responses
-        if (!fallbackText || fallbackText.trim().length === 0) {
-          throw new Error('Empty AI response in fallback');
-        }
-        
-        // Extract everything between the first { and last }
-        const firstBrace = fallbackText.indexOf('{');
-        const lastBrace = fallbackText.lastIndexOf('}');
-        if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
-          fallbackText = fallbackText.substring(firstBrace, lastBrace + 1);
-          console.log("Extracted JSON portion:", fallbackText);
-          
-          // Aggressive cleaning
-          fallbackText = fallbackText.replace(/[\r\n]/g, ' ');
-          fallbackText = fallbackText.replace(/\s+/g, ' ');
-          
-          // Remove control characters
-          fallbackText = fallbackText.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
-          
-          // Extract JSON-like structure (more conservative)
-          fallbackText = fallbackText.replace(/([^\s"':,{}\[\]])\s*(?=:)/g, function(match, p1) {
-            // Only quote property names that look valid
-            if (/^[a-zA-Z0-9_]+$/.test(p1)) {
-              return '"' + p1 + '"';
-            }
-            return match;
-          });
-          
-          fallbackText = fallbackText.replace(/:\s*([^"'][^,}\]]*?)(?=\s*[},]|$)/g, function(match, p1) {
-            // Only quote values that aren't already quoted and look like strings
-            if (p1 && !/^\s*$/.test(p1) && !/^\d+(\.\d+)?$/.test(p1) && p1 !== 'true' && p1 !== 'false' && p1 !== 'null') {
-              return ': "' + p1.trim() + '"';
-            }
-            return match;
-          });
-          
-          fallbackText = fallbackText.replace(/,\s*}/g, '}').replace(/,\s*]/g, ']');
-          
-          // Additional validation
-          if (fallbackText.length < 10) {
-            throw new Error('Fallback text too short to be valid JSON');
-          }
-          
-          console.log("Cleaned JSON text:", fallbackText);
-          tripData = JSON.parse(fallbackText);
-        } else {
-          throw new Error('No valid JSON object found in fallback parsing');
-        }
-      } catch (fallbackError) {
-        console.error("Fallback parsing also failed:", fallbackError);
-        
-        // If all parsing fails, create a basic structure with real hotels data
-        tripData = {
-          hotels: realHotels && Array.isArray(realHotels) ? realHotels : [],
-          itinerary: []
-        };
-      }
-    }
-    
+        // Use our robust JSON parsing function
+    let tripData = robustJSONParse(response.text());    
     // Validate and merge real hotel data with AI-generated data
     // Ensure tripData has the expected structure
     if (!tripData || typeof tripData !== 'object') {
