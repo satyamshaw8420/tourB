@@ -1,8 +1,15 @@
 import axios from 'axios';
 
 // Unsplash API for image search
-const UNSPLASH_ACCESS_KEY = '-SM0favOiLSKdFiD9cMc58LkLseqUZLcTeohV3qLW_w'; // Your provided access key
+const UNSPLASH_ACCESS_KEY = '-SM0favOiLSKdFiD9cMc58LkLseqUZLcTeohV3qLW_w'; // Updated access key
 const UNSPLASH_API_URL = 'https://api.unsplash.com/search/photos';
+
+// Application ID: 839519
+// Secret key: 3TbkBvg9QlONTA-ugghU2Cz7JhQLow9hOOtIU2qsYhM
+
+// Simple rate limiting mechanism
+let lastRequestTime = 0;
+const MIN_REQUEST_INTERVAL = 1000; // 1 second between requests
 
 /**
  * Search for images related to a destination using Unsplash API in real-time
@@ -20,20 +27,36 @@ export async function searchDestinationImages(destination, perPage = 5) {
       return [];
     }
     
+    // Rate limiting - wait if needed
+    const now = Date.now();
+    const timeSinceLastRequest = now - lastRequestTime;
+    if (timeSinceLastRequest < MIN_REQUEST_INTERVAL) {
+      const delay = MIN_REQUEST_INTERVAL - timeSinceLastRequest;
+      console.log(`Rate limiting: waiting ${delay}ms before making request`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+    
+    // Update last request time
+    lastRequestTime = Date.now();
+    
+    // Encode the destination query properly
+    const encodedDestination = encodeURIComponent(destination);
+    
     const response = await axios.get(UNSPLASH_API_URL, {
       headers: {
-        Authorization: `Client-ID ${UNSPLASH_ACCESS_KEY}`
+        'Authorization': `Client-ID ${UNSPLASH_ACCESS_KEY}`,
+        'Accept-Version': 'v1',
+        'User-Agent': 'TravelEase/1.0 (https://travelease.example.com)'
       },
       params: {
-        query: destination,
+        query: encodedDestination,
         per_page: perPage,
-        orientation: 'landscape',
-        // Add cache-busting parameter to ensure real-time results
-        cache_bust: Date.now()
+        orientation: 'landscape'
       }
     });
 
-    console.log('Unsplash API response:', response.data);
+    console.log('Unsplash API response status:', response.status);
+    console.log('Unsplash API response headers:', response.headers);
 
     if (response.data && response.data.results) {
       // Map the response to our expected format
@@ -56,7 +79,7 @@ export async function searchDestinationImages(destination, perPage = 5) {
 
     return [];
   } catch (error) {
-    console.error('Error searching for destination images from Unsplash API:', error);
+    console.error('Error searching for destination images from Unsplash API:', error.response?.status, error.response?.data || error.message);
     // Return empty array as fallback
     return [];
   }
@@ -75,7 +98,15 @@ export async function getPlaceImage(placeName) {
       return null;
     }
     
-    const images = await searchDestinationImages(placeName, 1);
+    // Try with the original place name first
+    let images = await searchDestinationImages(placeName, 1);
+    
+    // If no images found, try with a modified query
+    if (!images || images.length === 0) {
+      console.log(`No images found for "${placeName}", trying with modified query...`);
+      images = await searchDestinationImages(`${placeName} attraction`, 1);
+    }
+    
     if (images && images.length > 0) {
       return images[0].largeImageUrl || images[0].imageUrl;
     }
@@ -99,7 +130,15 @@ export async function getDestinationImage(destination) {
       return null;
     }
     
-    const images = await searchDestinationImages(destination, 1);
+    // Try with the original destination first
+    let images = await searchDestinationImages(destination, 1);
+    
+    // If no images found, try with a modified query
+    if (!images || images.length === 0) {
+      console.log(`No images found for "${destination}", trying with modified query...`);
+      images = await searchDestinationImages(`${destination} travel`, 1);
+    }
+    
     if (images && images.length > 0) {
       return images[0].largeImageUrl || images[0].imageUrl;
     }
@@ -110,27 +149,8 @@ export async function getDestinationImage(destination) {
   }
 }
 
-/**
- * Generate a placeholder image with destination text overlay
- * Note: This is a fallback if no real images are found from Unsplash
- * @param {string} destination - The destination name
- * @returns {string} Placeholder image URL with text
- */
-export function generatePlaceholderImage(destination) {
-  // Using a service like placehold.co to generate images with text
-  // Format: https://placehold.co/{width}x{height}/{bgColor}/{textColor}?text={text}
-  const width = 800;
-  const height = 600;
-  const bgColor = '007bff'; // Blue background
-  const textColor = 'ffffff'; // White text
-  const encodedText = encodeURIComponent(destination);
-  
-  return `https://placehold.co/${width}x${height}/${bgColor}/${textColor}?text=${encodedText}`;
-}
-
 export default {
   searchDestinationImages,
   getDestinationImage,
-  getPlaceImage,
-  generatePlaceholderImage
+  getPlaceImage
 };

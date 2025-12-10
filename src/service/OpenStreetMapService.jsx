@@ -4,75 +4,189 @@ import axios from 'axios';
  * Service to fetch real hotel data from OpenStreetMap
  */
 
-// Function to search for hotels near a specific location
-export const searchHotelsNearLocation = async (location, budgetTier = 'moderate', radius = 5000) => {
-  try {
-    // First, we need to geocode the location to get coordinates
-    const geocodeResponse = await axios.get(
-      `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(location)}&format=json&limit=1`
-    );
+// Create axios instances with proper headers to reduce CORS issues
+const nominatimApi = axios.create({
+  baseURL: 'https://nominatim.openstreetmap.org',
+  headers: {
+    'User-Agent': 'TravelEase/1.0 (https://travelease.example.com)',
+    'Accept': 'application/json'
+  },
+  timeout: 15000 // Increased timeout to 15 seconds
+});
 
-    if (!geocodeResponse.data || geocodeResponse.data.length === 0) {
-      throw new Error('Location not found');
-    }
-
-    const { lat, lon } = geocodeResponse.data[0];
-    
-    // Now search for hotels near the location
-    // Using Overpass API to search for hotels
-    const overpassQuery = `
-      [out:json][timeout:25];
-      (
-        node["tourism"="hotel"](around:${radius},${lat},${lon});
-        way["tourism"="hotel"](around:${radius},${lat},${lon});
-        relation["tourism"="hotel"](around:${radius},${lat},${lon});
-      );
-      out center;
-    `;
-    
-    const overpassResponse = await axios.post(
-      'https://overpass-api.de/api/interpreter',
-      `data=${encodeURIComponent(overpassQuery)}`
-    );
-    
-    // Process the results to extract hotel information
-    const hotels = processOverpassResults(overpassResponse.data.elements, location, budgetTier);
-    
-    // Filter hotels based on budget tier
-    const filteredHotels = filterHotelsByBudget(hotels, budgetTier);
-    
-    return filteredHotels;
-  } catch (error) {
-    console.error('Error fetching hotels from OpenStreetMap:', error);
-    // Return fallback data if API fails
-    const fallbackHotels = getFallbackHotels(location, budgetTier);
-    return filterHotelsByBudget(fallbackHotels, budgetTier);
-  }
-};
+const overpassApi = axios.create({
+  baseURL: 'https://overpass-api.de/api/interpreter', // Direct endpoint
+  headers: {
+    'User-Agent': 'TravelEase/1.0 (https://travelease.example.com)',
+    'Accept': 'application/json'
+  },
+  timeout: 20000 // Increased timeout to 20 seconds
+});
 
 // Process Overpass API results
 const processOverpassResults = (elements, location, budgetTier) => {
+  if (!elements || !Array.isArray(elements)) {
+    return [];
+  }
+  
   return elements
     .filter(element => element.tags && element.tags.name)
     .map(element => {
-      const lat = element.center ? element.center.lat : element.lat;
-      const lng = element.center ? element.center.lon : element.lon;
+      const lat = element.center ? element.center.lat : (element.lat || 0);
+      const lng = element.center ? element.center.lon : (element.lon || 0);
       
       // Generate a more realistic price based on rating and budget tier
-      const baseRating = Math.floor(Math.random() * 3) + 3; // Random rating between 3-5
+      const baseRating = Math.min(5, Math.max(3, Math.floor(Math.random() * 3) + 3)); // Random rating between 3-5
       const price = generatePriceByBudget(baseRating, budgetTier);
       
       return {
         hotelName: element.tags.name || 'Hotel',
-        hotelAddress: element.tags.address || element.tags['addr:full'] || element.tags['addr:street'] || 'Address not available',
-        description: element.tags.description || element.tags.amenity || element.tags.tourism || `A comfortable hotel in ${location}`,
+        hotelAddress: element.tags['addr:full'] || element.tags['addr:street'] || element.tags.address || 'Address not available',
+        description: element.tags.description || `A comfortable hotel in ${location}`,
         geoCoordinates: { lat, lng },
         rating: baseRating,
         price: price,
-        hotelImageUrl: '' // We'll need to fetch images separately or use placeholders
+        hotelImageUrl: '' // Will be populated with Unsplash image
       };
     })
-    .slice(0, 10); // Limit to 10 hotels
+    .slice(0, 15); // Increase limit before filtering
+};
+
+// Filter hotels by budget tier
+const filterHotelsByBudget = (hotels, budgetTier) => {
+  // Define price ranges for each budget tier (in Indian Rupees per night)
+  const priceRanges = {
+    cheap: { min: 0, max: 7000 },
+    moderate: { min: 5000, max: 15000 },
+    luxury: { min: 12000, max: 100000 }
+  };
+  
+  const range = priceRanges[budgetTier] || priceRanges.moderate;
+  
+  return hotels.filter(hotel => {
+    // Extract numeric price from string like "₹7,800 per night"
+    const priceMatch = hotel.price.match(/₹([\d,]+)/);
+    if (!priceMatch) return true; // If we can't parse the price, include the hotel
+    
+    const price = parseInt(priceMatch[1].replace(/,/g, ''));
+    return price >= range.min && price <= range.max;
+  }).slice(0, 10); // Limit to 10 hotels
+};
+
+// Function to enhance hotels with Unsplash images
+const enhanceHotelsWithImages = async (hotels) => {
+  const enhancedHotels = [];
+  
+  for (const hotel of hotels) {
+    // If hotel doesn't have an image URL, try to get one from Unsplash
+    if (!hotel.hotelImageUrl) {
+      try {
+        // Import the Unsplash image service dynamically to avoid circular dependencies
+        const { getPlaceImage } = await import('./ImageGenerationService.jsx');
+        const imageUrl = await getPlaceImage(hotel.hotelName);
+        if (imageUrl) {
+          hotel.hotelImageUrl = imageUrl;
+        }
+      } catch (error) {
+        console.error('Error getting image for hotel:', hotel.hotelName, error);
+        // If Unsplash fails, we'll leave the imageUrl empty and let the frontend handle it
+      }
+    }
+    enhancedHotels.push(hotel);
+  }
+  
+  return enhancedHotels;
+};
+
+// Function to search for hotels near a specific location
+export const searchHotelsNearLocation = async (location, budgetTier = 'moderate', radius = 3000) => {
+  try {
+    console.log(`Searching for hotels near: ${location}`);
+    
+    // First, we need to geocode the location to get coordinates
+    const geocodeResponse = await nominatimApi.get('', {
+      params: {
+        q: location,
+        format: 'json',
+        limit: 1
+      }
+    });
+
+    if (!geocodeResponse.data || geocodeResponse.data.length === 0) {
+      console.warn('Location not found, using fallback');
+      let fallbackHotels = getFallbackHotels(location, budgetTier);
+      // Enhance fallback hotels with Unsplash images
+      fallbackHotels = await enhanceHotelsWithImages(fallbackHotels);
+      return filterHotelsByBudget(fallbackHotels, budgetTier);
+    }
+
+    const { lat, lon } = geocodeResponse.data[0];
+    console.log(`Found coordinates: ${lat}, ${lon}`);
+    
+    // Simplified Overpass query with reduced timeout and smaller radius
+    const overpassQuery = `
+      [out:json][timeout:15];
+      (
+        node["tourism"="hotel"](around:${radius},${lat},${lon});
+        way["tourism"="hotel"](around:${radius},${lat},${lon});
+      );
+      out center limit 15;
+    `;
+    
+    console.log('Sending Overpass query...');
+    
+    // Using direct POST with form data
+    const overpassResponse = await axios.post(
+      'https://overpass-api.de/api/interpreter',
+      `data=${encodeURIComponent(overpassQuery)}`,
+      {
+        headers: {
+          'User-Agent': 'TravelEase/1.0 (https://travelease.example.com)',
+          'Accept': 'application/json',
+          'Content-Type': 'application/x-www-form-urlencoded'
+        },
+        timeout: 20000
+      }
+    );
+    
+    console.log(`Received ${overpassResponse.data.elements.length} hotels from Overpass`);
+    
+    // Process the results to extract hotel information
+    let hotels = processOverpassResults(overpassResponse.data.elements, location, budgetTier);
+    
+    // Enhance hotels with Unsplash images
+    hotels = await enhanceHotelsWithImages(hotels);
+    
+    // Filter hotels based on budget tier
+    const filteredHotels = filterHotelsByBudget(hotels, budgetTier);
+    
+    // If we didn't get enough hotels, add some fallbacks
+    if (filteredHotels.length < 3) {
+      let fallbackHotels = getFallbackHotels(location, budgetTier);
+      // Enhance fallback hotels with Unsplash images
+      fallbackHotels = await enhanceHotelsWithImages(fallbackHotels);
+      const combinedHotels = [...filteredHotels, ...fallbackHotels];
+      // Remove duplicates and limit to 10
+      const uniqueHotels = combinedHotels.filter((hotel, index, self) => 
+        index === self.findIndex(h => h.hotelName === hotel.hotelName)
+      ).slice(0, 10);
+      return uniqueHotels;
+    }
+    
+    return filteredHotels.slice(0, 10); // Limit to 10 hotels
+  } catch (error) {
+    console.error('Error fetching hotels from OpenStreetMap:', error.message);
+    if (error.response) {
+      console.error('Response status:', error.response.status);
+      console.error('Response data:', error.response.data);
+    }
+    
+    // Return fallback data if API fails
+    let fallbackHotels = getFallbackHotels(location, budgetTier);
+    // Enhance fallback hotels with Unsplash images
+    fallbackHotels = await enhanceHotelsWithImages(fallbackHotels);
+    return filterHotelsByBudget(fallbackHotels, budgetTier);
+  }
 };
 
 // Generate price based on budget tier
@@ -98,29 +212,11 @@ const generatePriceByBudget = (rating, budgetTier) => {
   return `₹${Math.round(finalPrice).toLocaleString()} per night`;
 };
 
-// Filter hotels by budget tier
-const filterHotelsByBudget = (hotels, budgetTier) => {
-  // Define price ranges for each budget tier (in Indian Rupees per night)
-  const priceRanges = {
-    cheap: { min: 0, max: 7000 },
-    moderate: { min: 5000, max: 15000 },
-    luxury: { min: 12000, max: 100000 }
-  };
-  
-  const range = priceRanges[budgetTier] || priceRanges.moderate;
-  
-  return hotels.filter(hotel => {
-    // Extract numeric price from string like "₹7,800 per night"
-    const priceMatch = hotel.price.match(/₹([\d,]+)/);
-    if (!priceMatch) return true; // If we can't parse the price, include the hotel
-    
-    const price = parseInt(priceMatch[1].replace(/,/g, ''));
-    return price >= range.min && price <= range.max;
-  });
-};
-
 // Fallback hotel data in case API fails
 const getFallbackHotels = (location, budgetTier) => {
+  // Import the Unsplash image service
+  // Note: We can't import it directly here due to circular dependencies, so we'll define a simplified version
+  
   // Define fallback hotels for each budget tier
   const fallbackHotelsByBudget = {
     cheap: [
@@ -131,7 +227,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7282, lng: -74.0776 },
         rating: 3,
         price: '₹4,500 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Budget Lodge ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       },
       {
         hotelName: `Hostel Central ${location}`,
@@ -140,7 +236,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7505, lng: -73.9934 },
         rating: 3,
         price: '₹2,800 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Hostel Central ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       },
       {
         hotelName: `Economy Inn ${location}`,
@@ -149,7 +245,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7549, lng: -73.9840 },
         rating: 2,
         price: '₹3,200 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Economy Inn ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       }
     ],
     moderate: [
@@ -160,7 +256,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7589, lng: -73.9851 },
         rating: 4,
         price: '₹7,800 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`City Center Inn ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       },
       {
         hotelName: `Business Suites ${location}`,
@@ -169,7 +265,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7549, lng: -73.9840 },
         rating: 4,
         price: '₹9,200 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Business Suites ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       },
       {
         hotelName: `Heritage Hotel ${location}`,
@@ -178,7 +274,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7282, lng: -74.0776 },
         rating: 4,
         price: '₹8,500 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Heritage Hotel ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       }
     ],
     luxury: [
@@ -189,7 +285,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7128, lng: -74.0060 }, // Default coordinates
         rating: 5,
         price: '₹12,500 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Grand Hotel ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       },
       {
         hotelName: `Seaside Resort ${location}`,
@@ -198,7 +294,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7505, lng: -73.9934 },
         rating: 5,
         price: '₹16,200 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Seaside Resort ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       },
       {
         hotelName: `Palace Hotel ${location}`,
@@ -207,7 +303,7 @@ const getFallbackHotels = (location, budgetTier) => {
         geoCoordinates: { lat: 40.7589, lng: -73.9851 },
         rating: 5,
         price: '₹22,500 per night',
-        hotelImageUrl: `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(`Palace Hotel ${location}`)}`
+        hotelImageUrl: '' // Will be populated with Unsplash image
       }
     ]
   };
@@ -218,9 +314,12 @@ const getFallbackHotels = (location, budgetTier) => {
 // Function to get a single hotel by ID (if needed)
 export const getHotelById = async (osmId) => {
   try {
-    const response = await axios.get(
-      `https://nominatim.openstreetmap.org/lookup?osm_ids=N${osmId}&format=json`
-    );
+    const response = await nominatimApi.get('/lookup', {
+      params: {
+        osm_ids: `N${osmId}`,
+        format: 'json'
+      }
+    });
     
     if (response.data && response.data.length > 0) {
       const hotel = response.data[0];

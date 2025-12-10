@@ -6,7 +6,7 @@ import { useFetchTrips } from '@/hooks/useFetchTrips';
 import { useShareTrip } from '@/hooks/useShareTrip';
 import { motion } from 'framer-motion';
 import { toast } from 'sonner';
-
+import SkeletonLoader from './SkeletonLoader';
 const TripHistory = () => {
   const navigate = useNavigate();
   const { generateShareLink, copyToClipboard } = useShareTrip();
@@ -106,18 +106,20 @@ const TripHistory = () => {
     }
   };
 
-  // Show loading state
+  // Show loading state with skeleton
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50/30 via-white to-purple-50/30 p-4 md:p-8 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto"></div>
-          <p className="mt-4 text-gray-600">Loading your trips...</p>
+      <div className="min-h-screen bg-gradient-to-br from-blue-50/30 via-white to-purple-50/30 p-4 md:p-8">
+        <div className="max-w-7xl mx-auto">
+          <div className="mb-8 text-center">
+            <h1 className="text-3xl md:text-4xl font-bold text-gray-800 mb-2">Trip History</h1>
+            <p className="text-gray-600">View and manage all your planned trips</p>
+          </div>
+          <SkeletonLoader />
         </div>
       </div>
     );
   }
-
   // Show message if user is not logged in
   if (!user) {
     return (

@@ -7,6 +7,7 @@ const TripFinancingPanel = ({ tripData, onClose }) => {
   const [selectedAddons, setSelectedAddons] = useState([]);
   const [walletAmount, setWalletAmount] = useState(0);
   const [nextDueDate, setNextDueDate] = useState('');
+  const [friendsCount, setFriendsCount] = useState(2); // Added for split with friends
 
   // Calculate next due date (30 days from now)
   useEffect(() => {
@@ -15,21 +16,52 @@ const TripFinancingPanel = ({ tripData, onClose }) => {
     setNextDueDate(date.toLocaleDateString());
   }, []);
 
-  // Extract total trip cost from tripData
-  const totalTripCost = tripData?.estimatedTotalCostPerCouple?.total_range || '₹25,000 - ₹35,000';
-  const numericTotal = parseInt(totalTripCost.replace(/[₹,]/g, '')) || 0;
-  
+  // Function to get guide cost based on budget tier
+  const getGuideCostFromBudget = (budgetTier) => {
+    switch(budgetTier) {
+      case 1: return 3000; // Cheap tier
+      case 2: return 5000; // Moderate tier
+      case 3: return 8000; // Luxury tier
+      default: return 0;
+    }
+  };
+
+  // Extract trip information
+  const guideCost = tripData?.userSelection?.needGuide 
+    ? getGuideCostFromBudget(tripData?.userSelection?.budget)
+    : 0;
+    
+  // Use custom budget amount if provided, otherwise use base cost of 25000
+  const baseCost = tripData?.userSelection?.customBudget 
+    ? parseInt(tripData.userSelection.customBudget) || 25000
+    : 25000;
+    
+  const numericTotal = baseCost + guideCost;
+  const totalTripCost = `₹${numericTotal.toLocaleString()}`;
+
   const emiCalculations = {
-    monthlyPayment: Math.round((numericTotal - emiUpfront) / emiTenure),
+    monthlyPayment: numericTotal > emiUpfront ? Math.round((numericTotal - emiUpfront) / emiTenure) : 0,
     totalPayable: numericTotal + Math.round(numericTotal * 0.02 * emiTenure / 12), // 2% interest
     totalInterest: Math.round(numericTotal * 0.02 * emiTenure / 12),
   };
 
-  // Recommended EMI plans
+  // Recommended EMI plans with proper validation
   const recommendedPlans = [
-    { name: "Smart plan", amount: Math.round(numericTotal * 0.125), months: 6 },
-    { name: "Low EMI", amount: Math.round(numericTotal * 0.075), months: 10 },
-    { name: "Quick plan", amount: Math.round(numericTotal * 0.2), months: 3 }
+    { 
+      name: "Smart plan", 
+      amount: numericTotal > 0 ? Math.max(500, Math.round(numericTotal * 0.125)) : 2500, 
+      months: 6 
+    },
+    { 
+      name: "Low EMI", 
+      amount: numericTotal > 0 ? Math.max(1000, Math.round(numericTotal * 0.075)) : 1500, 
+      months: 10 
+    },
+    { 
+      name: "Quick plan", 
+      amount: numericTotal > 0 ? Math.max(1500, Math.round(numericTotal * 0.2)) : 5000, 
+      months: 3 
+    }
   ];
 
   // Add-ons
@@ -53,6 +85,14 @@ const TripFinancingPanel = ({ tripData, onClose }) => {
   // Handle quick add to wallet
   const addToWallet = (amount) => {
     setWalletAmount(walletAmount + amount);
+  };
+
+  // Calculate addons total
+  const calculateAddonsTotal = () => {
+    return selectedAddons.reduce((total, addonId) => {
+      const addon = addons.find(a => a.id === addonId);
+      return total + (addon ? parseInt(addon.price.replace(/[₹,]/g, '')) || 0 : 0);
+    }, 0);
   };
 
   return (
@@ -92,6 +132,27 @@ const TripFinancingPanel = ({ tripData, onClose }) => {
               <div className="flex-grow">
                 <h1 className="text-3xl font-bold text-gray-900 mb-2">Trip Financing & Payment Options</h1>
                 <p className="text-gray-600 mb-8">How would you like to afford this trip?</p>
+                
+                {/* Trip Summary */}
+                <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                  <div className="flex justify-between items-center">
+                    <div>
+                      <h3 className="font-semibold text-gray-900">
+                        {tripData?.userSelection?.location?.label || 'Your Trip'}
+                      </h3>
+                      <p className="text-sm text-gray-600">
+                        {tripData?.userSelection?.days || 'N/A'} days • {tripData?.userSelection?.travelers || 'N/A'} travelers
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-sm text-gray-600">Total Cost</p>
+                      <p className="text-xl font-bold text-gray-900">{totalTripCost}</p>
+                      {tripData?.userSelection?.needGuide && (
+                        <p className="text-xs text-blue-600">Guide Service Included (+₹{guideCost.toLocaleString()})</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
 
                 {/* Tab Navigation */}
                 <div className="flex flex-wrap gap-2 mb-8 border-b border-gray-200">
@@ -155,17 +216,29 @@ const TripFinancingPanel = ({ tripData, onClose }) => {
                             <span className="text-gray-600">Pay now:</span>
                             <span className="font-medium">₹{emiUpfront.toLocaleString()}</span>
                           </div>
+                          <div className="relative pt-1">
+                            <div className="flex justify-between mb-2">
+                              <span className="text-xs text-gray-500">0%</span>
+                              <span className="text-xs text-gray-500">100%</span>
+                            </div>
+                            <div className="overflow-hidden h-2 mb-4 text-xs flex rounded bg-gray-200">
+                              <div 
+                                style={{ width: `${numericTotal > 0 ? (emiUpfront / numericTotal) * 100 : 0}%` }}
+                                className="shadow-none flex flex-col text-center whitespace-nowrap text-white justify-center bg-green-500"
+                              ></div>
+                            </div>
+                          </div>
                           <input
                             type="range"
                             min="0"
-                            max={numericTotal}
+                            max={numericTotal > 0 ? numericTotal : 100000}
                             value={emiUpfront}
                             onChange={(e) => setEmiUpfront(Number(e.target.value))}
                             className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
                           />
                           <div className="flex justify-between text-xs text-gray-500 mt-1">
                             <span>₹0</span>
-                            <span>₹{numericTotal.toLocaleString()}</span>
+                            <span>₹{numericTotal > 0 ? numericTotal.toLocaleString() : '1,00,000'}</span>
                           </div>
                         </div>
                         
@@ -246,22 +319,25 @@ const TripFinancingPanel = ({ tripData, onClose }) => {
                         
                         <div className="mb-4">
                           <label className="block text-sm font-medium text-gray-700 mb-2">Number of People</label>
-                          <select className="w-full p-2 border border-gray-300 rounded-md">
-                            <option>2 People</option>
-                            <option>3 People</option>
-                            <option>4 People</option>
-                            <option>5 People</option>
+                          <select 
+                            value={friendsCount}
+                            onChange={(e) => setFriendsCount(Number(e.target.value))}
+                            className="w-full p-2 border border-gray-300 rounded-md"
+                          >
+                            {[2, 3, 4, 5, 6].map(num => (
+                              <option key={num} value={num}>{num} People</option>
+                            ))}
                           </select>
                         </div>
                         
                         <div className="grid grid-cols-2 gap-4">
                           <div className="bg-purple-50 rounded-lg p-3">
                             <div className="text-sm text-purple-600">Your Share</div>
-                            <div className="text-lg font-bold text-purple-800">₹12,500</div>
+                            <div className="text-lg font-bold text-purple-800">₹{Math.round(numericTotal / friendsCount).toLocaleString()}</div>
                           </div>
                           <div className="bg-purple-50 rounded-lg p-3">
                             <div className="text-sm text-purple-600">Per Person</div>
-                            <div className="text-lg font-bold text-purple-800">₹8,333</div>
+                            <div className="text-lg font-bold text-purple-800">₹{Math.round(numericTotal / friendsCount).toLocaleString()}</div>
                           </div>
                         </div>
                       </div>

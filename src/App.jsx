@@ -9,7 +9,7 @@ function App() {
   return (
     <div className="min-h-screen flex flex-col bg-linear-to-br from-blue-50/30 via-white to-purple-50/30">
       <PremiumHeader />
-      <main className="grow">
+      <main className="flex-grow">
         <PageTransition>
           <div className="w-full h-full">
             <Outlet />

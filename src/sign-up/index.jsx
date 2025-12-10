@@ -1,19 +1,23 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGoogleLogin } from '@react-oauth/google';
 import axios from 'axios';
 import { toast } from 'sonner';
 import { FcGoogle } from 'react-icons/fc';
 import { clearStaleOAuthData } from '@/utils/dataCleanup';
-// Removed particle system due to import issues
-// import Particles from '@tsparticles/react';
-// import { tsParticles } from '@tsparticles/engine';
-// import { loadFull } from '@tsparticles/react';
+import SignUpSkeleton from '@/components/custom/SignUpSkeleton';
 
 const SignUp = () => {
   const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(true);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [tilt, setTilt] = useState({ x: 0, y: 0, z: 0, scale: 1 }); // Added scale property to initial state
+  const buttonRef = useRef(null);
+  
+  // Log when tilt state changes
+  useEffect(() => {
+    console.log('Tilt state updated:', tilt);
+  }, [tilt]);
 
   // Check if user is already authenticated
   useEffect(() => {
@@ -117,32 +121,59 @@ const SignUp = () => {
       });
   };
 
-  // Auto-trigger Google Sign-In when component mounts (only if not authenticated)
-  useEffect(() => {
-    // Don't auto-trigger if still checking auth status or if already authenticated
-    if (isLoading || isAuthenticated) {
+  // Removed auto-trigger Google Sign-In to allow users to see the beautiful UI design first
+
+  // Handle mouse move for 3D tilt effect with additional checks
+  const handleMouseMove = (e) => {
+    // Check if the event and buttonRef are valid
+    if (!e || !buttonRef.current) {
+      console.log('Invalid event or button ref');
       return;
     }
+    
+    try {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const x = e.clientX - rect.left;
+      const y = e.clientY - rect.top;
+      const centerX = rect.width / 2;
+      const centerY = rect.height / 2;
+      
+      // Calculate tilt based on distance from center (more realistic 3D effect)
+      const tiltX = (y - centerY) / 8; // Increased sensitivity for more noticeable tilt
+      const tiltY = (centerX - x) / 8; // Increased sensitivity for more noticeable tilt
+      
+      // Calculate Z-axis movement (lift effect) with enhanced lift
+      const distance = Math.sqrt(Math.pow(x - centerX, 2) + Math.pow(y - centerY, 2));
+      const maxDistance = Math.sqrt(Math.pow(rect.width / 2, 2) + Math.pow(rect.height / 2, 2));
+      const lift = (1 - distance / maxDistance) * 30; // Increased lift effect
+      
+      // Calculate scale based on lift for more dynamic effect
+      const scale = 1 + (lift / 150); // Subtle scale increase with lift
+      
+      // Log the tilt values for debugging
+      console.log('Tilt values:', { x: tiltX, y: tiltY, z: lift, scale: scale });
+      
+      setTilt({ x: tiltX, y: tiltY, z: lift, scale: scale });
+    } catch (error) {
+      console.error('Error in handleMouseMove:', error);
+      // Reset tilt on error
+      setTilt({ x: 0, y: 0, z: 0, scale: 1 });
+    }
+  };
 
-    // Clear any existing OAuth data
-    clearGoogleOAuthData();
-    
-    // Small delay to ensure page is fully loaded and cleared
-    const timer = setTimeout(() => {
-      login();
-    }, 1000);
-    
-    return () => clearTimeout(timer);
-  }, [isLoading, isAuthenticated]);
+  // Reset tilt when mouse leaves
+  const handleMouseLeave = () => {
+    console.log('Mouse leave - resetting tilt');
+    setTilt({ x: 0, y: 0, z: 0, scale: 1 });
+  };
 
   // Show loading state while checking auth status
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-purple-900 via-pink-700 to-orange-600">
-        <div className="text-white text-xl">Checking authentication status...</div>
-      </div>
-    );
+    return <SignUpSkeleton />;
   }
+
+  // Log the tilt state for debugging
+  console.log('Current tilt state:', tilt);
 
   // If user is authenticated, don't render the sign-up form
   if (isAuthenticated) {
@@ -193,13 +224,14 @@ const SignUp = () => {
                   }}
                 >
                   <img 
-                    src="/logo.svg" 
+                    src="/travelease logo.png" 
                     alt="TravelEase Logo" 
-                    className="h-16 w-16 sm:h-24 sm:w-24 drop-shadow-2xl" 
+                    className="h-24 w-24 sm:h-32 sm:w-32 drop-shadow-2xl" 
                     style={{
                       filter: 'drop-shadow(0 10px 15px rgba(0,0,0,0.3))'
                     }}
                   />
+                  
                 </div>
               </div>
               <h2 className="mt-4 sm:mt-6 text-2xl sm:text-3xl font-extrabold text-white drop-shadow-lg">
@@ -217,53 +249,74 @@ const SignUp = () => {
                 <div className="border-t border-white/30 flex-grow"></div>
               </div>
 
-              <div className="mt-4 sm:mt-6">
-                {/* Enhanced glowing Google Sign-In button */}
+              <div className="mt-4 sm:mt-6" style={{ perspective: '1000px', transformStyle: 'preserve-3d' }}>
+                {/* Enhanced glowing Google Sign-In button with 3D tilt effect */}
                 <button
+                  ref={buttonRef}
+                  onMouseMove={handleMouseMove}
+                  onMouseLeave={handleMouseLeave}
                   onClick={() => {
+                    console.log('Button clicked');
                     clearGoogleOAuthData();
                     login();
                   }}
-                  className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-lg sm:rounded-xl shadow-lg transition-all duration-300 transform hover:scale-105 hover:from-blue-600 hover:to-purple-700 hover:rotate-1 group"
+                  className="w-full flex items-center justify-center gap-2 sm:gap-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-bold py-3 sm:py-4 px-4 sm:px-6 rounded-lg sm:rounded-xl shadow-lg transition-all duration-300 transform group will-change-transform"
                   style={{
-                    boxShadow: '0 0 15px rgba(168, 85, 247, 0.4), 0 3px 10px rgba(0, 0, 0, 0.2)'
+                    boxShadow: `0 0 ${20 + Math.abs(tilt.x) + Math.abs(tilt.y)}px rgba(168, 85, 247, ${0.5 + Math.abs(tilt.x)/50 + Math.abs(tilt.y)/50}), 0 ${10 + tilt.z}px ${15 + tilt.z * 2}px rgba(0, 0, 0, 0.4)`,
+                    transform: `rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateZ(${tilt.z}px) scale(${tilt.scale || 1})`,
+                    transformOrigin: 'center',
+                    transformStyle: 'preserve-3d',
+                    transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease, filter 0.3s ease',
+                    filter: `brightness(${1 + tilt.z/50}) saturate(${1 + tilt.z/100})`,
+                    zIndex: 10,
+                    // Add perspective directly to the button as well
+                    perspective: '1000px',
+                    position: 'relative',
+                    // Add hardware acceleration
+                    backfaceVisibility: 'hidden',
+                    WebkitFontSmoothing: 'antialiased'
                   }}
+                  // Add data attributes for debugging
+                  data-tilt-x={tilt.x}
+                  data-tilt-y={tilt.y}
+                  data-tilt-z={tilt.z}
+                  data-tilt-scale={tilt.scale}
                 >
                   <FcGoogle className="text-xl sm:text-2xl group-hover:scale-110 transition-transform" />
                   <span className="text-sm sm:text-base font-bold">Continue with Google</span>
                 </button>
+              </div>
                 
-                {/* Glowing info box */}
-                <div 
-                  className="mt-6 sm:mt-8 p-4 bg-white/10 rounded-lg sm:rounded-xl border border-white/20 backdrop-blur-lg"
-                  style={{
-                    boxShadow: 'inset 0 0 10px rgba(255, 255, 255, 0.1), 0 3px 10px rgba(0, 0, 0, 0.1)'
-                  }}
+              {/* Glowing info box */}
+              <div 
+                className="mt-6 sm:mt-8 p-4 bg-white/10 rounded-lg sm:rounded-xl border border-white/20 backdrop-blur-lg"
+                style={{
+                  boxShadow: 'inset 0 0 10px rgba(255, 255, 255, 0.1), 0 3px 10px rgba(0, 0, 0, 0.1)'
+                }}
+              >
+                <h3 className="text-xs sm:text-sm font-bold text-white mb-2 flex items-center drop-shadow">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  Why Google Sign-In?
+                </h3>
+                <ul className="text-xs text-white/90 list-disc pl-4 sm:pl-5 space-y-1 drop-shadow">
+                  <li>Quick and secure authentication</li>
+                  <li>Sync your trips across devices</li>
+                  <li>Access to personalized recommendations</li>
+                </ul>
+              </div>
+              
+              <div className="mt-6 sm:mt-8 text-center">
+                <button
+                  onClick={() => navigate('/')}
+                  className="text-xs sm:text-sm text-white/80 hover:text-white font-medium flex items-center justify-center gap-1 mx-auto transition-all hover:gap-2"
                 >
-                  <h3 className="text-xs sm:text-sm font-bold text-white mb-2 flex items-center drop-shadow">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4 mr-1 sm:mr-2 text-blue-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                    </svg>
-                    Why Google Sign-In?
-                  </h3>
-                  <ul className="text-xs text-white/90 list-disc pl-4 sm:pl-5 space-y-1 drop-shadow">
-                    <li>Quick and secure authentication</li>
-                    <li>Sync your trips across devices</li>
-                    <li>Access to personalized recommendations</li>
-                  </ul>
-                </div>
-                
-                <div className="mt-6 sm:mt-8 text-center">
-                  <button
-                    onClick={() => navigate('/')}
-                    className="text-xs sm:text-sm text-white/80 hover:text-white font-medium flex items-center justify-center gap-1 mx-auto transition-all hover:gap-2"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
-                    </svg>
-                    Back to Home
-                  </button>
-                </div>
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3 sm:h-4 sm:w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 19l-7-7m0 0l7-7m-7 7h18" />
+                  </svg>
+                  Back to Home
+                </button>
               </div>
             </div>
           </div>

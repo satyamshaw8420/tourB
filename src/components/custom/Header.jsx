@@ -14,7 +14,7 @@ const Header = () => {
   return (
     <div className='p-3 shadow-sm flex justify-between items-center px-5'>
       <div className="flex items-center gap-8 ml-0">
-        <img src="/logo.svg" alt="TravelEase Logo" style={{ width: '100px', height: 'auto' }} />
+        <img src="/travelease logo.png" alt="TravelEase Logo" style={{ width: '200px', height: 'auto' }} />
         <div className="hidden md:flex gap-10">
           <button 
             onClick={() => navigate('/')} 

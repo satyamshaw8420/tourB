@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import { FaUserTie } from 'react-icons/fa'; // Added FaUserTie for guide icon
 import { toast } from 'sonner';
-import { clearAllUserData } from '@/utils/dataCleanup';
+import { useAuth } from '@/hooks/useAuth'; // Import the new auth hook
 
 const PremiumHeader = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user, logout } = useAuth(); // Use the new auth hook
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState(null);
+  const [isGuideDropdownOpen, setIsGuideDropdownOpen] = useState(false); // Added state for guide dropdown
 
   const navItems = [
     { name: 'Home', path: '/' },
@@ -18,40 +20,20 @@ const PremiumHeader = () => {
     { name: 'Offline', path: '/offline' },
     { name: 'Weather', path: '/weather' },
     { name: 'Community', path: '/social' },
+    // Guide option will be added separately as a dropdown
   ];
-
-  // Check if user is logged in
-  useEffect(() => {
-    const userData = localStorage.getItem('user');
-    if (userData) {
-      try {
-        const parsedUser = JSON.parse(userData);
-        setUser(parsedUser);
-      } catch (error) {
-        console.error('Error parsing user data:', error);
-      }
-    }
-  }, []);
-
-  // Comprehensive logout function that clears all user data
-  const handleLogout = () => {
-    // Clear all user-related data using utility function
-    clearAllUserData();
-    
-    // Clear user state
-    setUser(null);
-    
-    // Show success message
-    toast.success("You have been logged out successfully. All user data cleared.");
-    
-    // Navigate to home page
-    navigate('/');
-  };
 
   // Function to trigger Google Sign-In
   const handleGoogleSignIn = () => {
     // Navigate to the dedicated sign-up page
     navigate('/sign-up');
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    logout(); // Use the logout function from the hook
+    toast.success("You have been logged out successfully. All user data cleared.");
+    navigate('/');
   };
 
   return (
@@ -65,8 +47,9 @@ const PremiumHeader = () => {
               onClick={() => navigate('/')}
               style={{ cursor: 'pointer' }}
             >
-              <img src="/logo.svg" alt="TravelEase Logo" className="h-8 w-auto" />
+              <img src="/travelease logo.png" alt="TravelEase Logo" className="h-25 w-auto" />
             </div>
+            
           </div>
 
           {/* Desktop Navigation - Text only links */}
@@ -87,6 +70,39 @@ const PremiumHeader = () => {
                 {item.name}
               </button>
             ))}
+            
+            {/* Guide Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsGuideDropdownOpen(!isGuideDropdownOpen)}
+                className="text-white !text-white font-medium hover:text-blue-400 hover:underline transition-all duration-300 ease-in-out focus:outline-none focus:ring-0 whitespace-nowrap flex items-center"
+              >
+                <FaUserTie className="mr-1" /> Guide
+              </button>
+              
+              {isGuideDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-48 bg-white rounded-md shadow-lg py-1 z-50">
+                  <button
+                    onClick={() => {
+                      navigate('/');
+                      setIsGuideDropdownOpen(false);
+                    }}
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    Be a Traveller
+                  </button>
+                  <button
+                    onClick={() => {
+                      navigate('/guide');
+                      setIsGuideDropdownOpen(false);
+                    }}
+                    className="block px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 w-full text-left"
+                  >
+                    Be a Guide
+                  </button>
+                </div>
+              )}
+            </div>
           </nav>
 
           {/* Right side - Authentication */}
@@ -147,6 +163,30 @@ const PremiumHeader = () => {
                 {item.name}
               </button>
             ))}
+            
+            {/* Mobile Guide Options */}
+            <div className="pt-2">
+              <div className="text-white font-medium py-2">Guide Options</div>
+              <button
+                onClick={() => {
+                  navigate('/');
+                  setIsMenuOpen(false);
+                }}
+                className="text-left text-white !text-white font-medium py-2 pl-4 hover:text-blue-400 hover:underline transition-all duration-300 ease-in-out focus:outline-none focus:ring-0"
+              >
+                Be a Traveller
+              </button>
+              <button
+                onClick={() => {
+                  navigate('/guide');
+                  setIsMenuOpen(false);
+                }}
+                className="text-left text-white !text-white font-medium py-2 pl-4 hover:text-blue-400 hover:underline transition-all duration-300 ease-in-out focus:outline-none focus:ring-0"
+              >
+                Be a Guide
+              </button>
+            </div>
+            
             {/* Mobile Authentication Section */}
             <div className="flex space-x-2 pt-2">
               {user ? (

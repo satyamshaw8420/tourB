@@ -8,6 +8,8 @@ import HotelMap from '../components/custom/HotelMap';
 import TripMap from '../components/custom/TripMap';
 import { categorizeActivitiesByTime, getTimePeriodLabel, getTimePeriodDescription } from '@/utils/itineraryHelpers';
 import { getPlaceImage } from '@/service/ImageGenerationService';
+import ViewTripSkeleton from '@/components/custom/ViewTripSkeleton';
+import { FaUserTie, FaInfoCircle } from 'react-icons/fa'; // Added FaUserTie for guide icon
 
 // Function to enhance places with real images
 const enhancePlacesWithImages = async (itinerary) => {
@@ -29,9 +31,32 @@ const enhancePlacesWithImages = async (itinerary) => {
           const imageUrl = await getPlaceImage(place.placeName);
           if (imageUrl) {
             place.placeImageUrl = imageUrl;
+          } else {
+            // Retry with a different query
+            const retryImageUrl = await getPlaceImage(`${place.placeName} attraction`);
+            if (retryImageUrl) {
+              place.placeImageUrl = retryImageUrl;
+            } else {
+              // Set a default image if no image is found
+              place.placeImageUrl = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+            }
           }
         } catch (error) {
           console.error('Error getting image for place:', place.placeName, error);
+          // Retry with a different query
+          try {
+            const retryImageUrl = await getPlaceImage(`${place.placeName} attraction`);
+            if (retryImageUrl) {
+              place.placeImageUrl = retryImageUrl;
+            } else {
+              // Set a default image if no image is found
+              place.placeImageUrl = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+            }
+          } catch (retryError) {
+            console.error('Retry failed for place image:', place.placeName, retryError);
+            // Set a default image if all attempts fail
+            place.placeImageUrl = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+          }
         }
       }
       enhancedPlan.push(place);
@@ -51,7 +76,7 @@ const ViewTrip = () => {
   const navigate = useNavigate();
   const [showFinancing, setShowFinancing] = useState(false);
   const [enhancedTravelPlan, setEnhancedTravelPlan] = useState(null);
-  const [selectedLocation, setSelectedLocation] = useState(null); // Add this state for map highlighting
+  const [selectedLocation, setSelectedLocation] = useState(null);
 
   // Fetch trip data using Convex - only if we have a valid tripId
   const trip = tripId ? useQuery(api.tripsQueries.getTripById, { id: tripId }) : null;
@@ -124,23 +149,73 @@ const ViewTrip = () => {
         console.log('Parsed trip data:', parsedData);
         console.log('Hotels data:', parsedData?.hotels);
         console.log('Itinerary data:', parsedData?.itinerary);
+        console.log('Itinerary data type:', typeof parsedData?.itinerary);
+        console.log('Itinerary data isArray:', Array.isArray(parsedData?.itinerary));
         
-        // Extract hotels and itinerary data
+        // Extract hotels and itinerary data with enhanced fallback logic
         let hotels = parsedData?.hotels || [];
         let itinerary = parsedData?.itinerary || [];
         
-        // Handle different itinerary formats
+        // Handle different itinerary formats with more robust logic
         if (itinerary && !Array.isArray(itinerary) && typeof itinerary === 'object') {
           if (Array.isArray(itinerary.days)) {
             itinerary = itinerary.days;
+          } else if (itinerary.plan && Array.isArray(itinerary.plan)) {
+            // Handle case where the entire itinerary is stored as a single plan
+            itinerary = [{
+              day: "Day 1",
+              date: "Day 1",
+              plan: itinerary.plan
+            }];
           } else {
             // Convert object values to array
             const itineraryArray = Object.values(itinerary);
             if (Array.isArray(itineraryArray) && itineraryArray.length > 0) {
-              itinerary = itineraryArray;
+              // Check if values are day objects or need to be wrapped
+              if (itineraryArray.every(item => item && (item.plan || item.activities))) {
+                itinerary = itineraryArray;
+              } else {
+                // Wrap in a single day if they appear to be activities
+                itinerary = [{
+                  day: "Day 1",
+                  date: "Day 1",
+                  plan: itineraryArray
+                }];
+              }
             }
           }
         }
+        
+        // Ensure itinerary is always an array and has proper structure
+        if (!Array.isArray(itinerary)) {
+          itinerary = [];
+        }
+        
+        // Validate and enhance each day in the itinerary
+        itinerary = itinerary.map((day, index) => {
+          // Ensure day has proper structure
+          const validatedDay = {
+            day: day.day || `Day ${index + 1}`,
+            date: day.date || `Day ${index + 1}`,
+            plan: Array.isArray(day.plan) ? day.plan : (Array.isArray(day.activities) ? day.activities : [])
+          };
+          
+          // If plan is still empty, try other possible property names
+          if (validatedDay.plan.length === 0) {
+            // Check for other possible activity arrays
+            Object.keys(day).forEach(key => {
+              if (Array.isArray(day[key]) && key !== 'day' && key !== 'date') {
+                validatedDay.plan = validatedDay.plan.concat(day[key]);
+              }
+            });
+          }
+          
+          return validatedDay;
+        });
+        
+        console.log('Processed itinerary data:', itinerary);
+        console.log('Processed itinerary data type:', typeof itinerary);
+        console.log('Processed itinerary data isArray:', Array.isArray(itinerary));
         
         // Filter hotels based on user's budget selection if available
         if (userSelection?.budget) {
@@ -156,9 +231,32 @@ const ViewTrip = () => {
               const imageUrl = await getPlaceImage(hotel.hotelName);
               if (imageUrl) {
                 hotel.hotelImageUrl = imageUrl;
+              } else {
+                // Retry with a different query
+                const retryImageUrl = await getPlaceImage(`${hotel.hotelName} hotel`);
+                if (retryImageUrl) {
+                  hotel.hotelImageUrl = retryImageUrl;
+                } else {
+                  // Set a default image if no image is found
+                  hotel.hotelImageUrl = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+                }
               }
             } catch (error) {
               console.error('Error getting image for hotel:', hotel.hotelName, error);
+              // Retry with a different query
+              try {
+                const retryImageUrl = await getPlaceImage(`${hotel.hotelName} hotel`);
+                if (retryImageUrl) {
+                  hotel.hotelImageUrl = retryImageUrl;
+                } else {
+                  // Set a default image if no image is found
+                  hotel.hotelImageUrl = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+                }
+              } catch (retryError) {
+                console.error('Retry failed for hotel image:', hotel.hotelName, retryError);
+                // Set a default image if all attempts fail
+                hotel.hotelImageUrl = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
+              }
             }
           }
           enhancedHotels.push(hotel);
@@ -167,6 +265,10 @@ const ViewTrip = () => {
         // Enhance itinerary with real images
         const enhancedItinerary = await enhancePlacesWithImages(itinerary);
         
+        console.log('Enhanced itinerary data:', enhancedItinerary);
+        console.log('Enhanced itinerary data type:', typeof enhancedItinerary);
+        console.log('Enhanced itinerary data isArray:', Array.isArray(enhancedItinerary));
+        
         // Create the enhanced travel plan
         setEnhancedTravelPlan({
           hotels: enhancedHotels,
@@ -174,11 +276,47 @@ const ViewTrip = () => {
         });
       } catch (err) {
         console.error('Error enhancing travel plan:', err);
+        // Set a fallback plan even if enhancement fails
+        if (trip.tripData) {
+          setEnhancedTravelPlan({
+            hotels: [],
+            itinerary: [{
+              day: "Day 1",
+              date: "Day 1",
+              plan: [{
+                placeName: "Sample Activity",
+                placeDetails: "This is a sample activity to demonstrate the itinerary structure.",
+                placeImageUrl: "https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80",
+                geoCoordinates: { lat: 0, lng: 0 },
+                ticketPricing: "Free",
+                rating: 4.5,
+                timeToVisit: "Morning",
+                timeTravel: "30 minutes"
+              }]
+            }]
+          });
+        }
       }
     };
     
     enhancePlan();
   }, [trip]);
+
+  // Calculate trip cost information with defensive programming
+  // Use custom budget amount if provided, otherwise estimate based on budget tier
+  const baseCost = trip?.userSelection?.customBudget 
+    ? parseInt(trip.userSelection.customBudget) || 25000
+    : (trip?.estimatedTotalCostPerCouple?.total_range 
+        ? parseInt(trip.estimatedTotalCostPerCouple.total_range.replace(/[^\d]/g, '')) 
+        : (trip?.userSelection?.budget ? 
+            // If we have a budget selection, estimate cost based on that
+            getEstimatedCostFromBudget(trip.userSelection.budget, trip.userSelection.days, trip.userSelection.travelers) 
+            : 25000));
+  // Only calculate guide cost if the guide toggle is enabled
+  const guideCost = trip?.userSelection?.needGuide 
+    ? getGuideCostFromBudget(trip?.userSelection?.budget)
+    : 0;
+  const totalCost = baseCost + guideCost;
 
   // Function to filter hotels based on user's budget selection
   const filterHotelsByUserBudget = (hotels, budget) => {
@@ -222,15 +360,7 @@ const ViewTrip = () => {
 
   if (trip === undefined) {
     // Still loading
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-lg">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Loading Trip</h2>
-          <p className="text-gray-600">Please wait while we fetch your trip details...</p>
-        </div>
-      </div>
-    );
+    return <ViewTripSkeleton />;
   }
 
   if (trip === null) {
@@ -253,15 +383,7 @@ const ViewTrip = () => {
 
   if (!enhancedTravelPlan) {
     // Still processing
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50 flex items-center justify-center">
-        <div className="text-center p-8 bg-white rounded-2xl shadow-lg">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-          <h2 className="text-2xl font-bold text-gray-800 mb-4">Processing Trip Data</h2>
-          <p className="text-gray-600">We're preparing your personalized travel plan...</p>
-        </div>
-      </div>
-    );
+    return <ViewTripSkeleton />;
   }
 
   return (
@@ -292,8 +414,52 @@ const ViewTrip = () => {
             </div>
             <div>
               <p className="text-gray-600 text-sm">Budget</p>
-              <p className="font-semibold text-lg">{trip.userSelection?.budget || 'N/A'}</p>
+              <p className="font-semibold text-lg">
+                {trip.userSelection?.budget ? getBudgetTierName(trip.userSelection.budget) : 'N/A'}
+                {trip.userSelection?.customBudget && ` (₹${parseInt(trip.userSelection.customBudget).toLocaleString()})`}
+              </p>
             </div>
+          </div>
+          
+          {/* Guide Service Information */}
+          {trip.userSelection?.needGuide && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200 flex items-center">
+              <FaUserTie className="text-blue-600 text-xl mr-3" />
+              <div>
+                <p className="font-semibold text-blue-800">Professional Guide Service Included</p>
+                <p className="text-sm text-blue-600">A local guide will be assigned to enhance your travel experience (+₹{guideCost.toLocaleString()})</p>
+              </div>
+            </div>
+          )}
+          
+          {/* Financial Summary */}
+          <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+            <div className="flex justify-between items-center">
+              <div>
+                <p className="font-semibold text-green-800">Total Trip Cost</p>
+                <p className="text-sm text-green-600">
+                  {trip.userSelection?.needGuide 
+                    ? `Base Cost: ₹${baseCost.toLocaleString()} + Guide: ₹${guideCost.toLocaleString()}` 
+                    : `Base Trip Cost: ₹${baseCost.toLocaleString()}`}
+                </p>
+              </div>
+              <div className="text-right">
+                <p className="font-bold text-green-800 text-xl">₹{totalCost.toLocaleString()}</p>
+              </div>
+            </div>
+          </div>
+          
+          {/* Financial Summary Button */}
+          <div className="mt-6 flex justify-center">
+            <button
+              onClick={() => navigate('/financial', { state: { tripData: trip } })}
+              className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white font-medium py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105 flex items-center shadow-lg"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              View Financial Breakdown
+            </button>
           </div>
         </div>
 
@@ -335,7 +501,6 @@ const ViewTrip = () => {
                       src={hotel.hotelImageUrl || 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'} 
                       alt={hotel.hotelName || 'Hotel Image'}
                       className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                      onError={(e) => { e.target.src = 'https://images.unsplash.com/photo-1566073771259-6a8506099945?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80'; }}
                     />
                   </div>
                   <div className="p-6">
@@ -369,7 +534,7 @@ const ViewTrip = () => {
         )}
 
         {/* Enhanced Itinerary Section with Map Integration */}
-        {enhancedTravelPlan?.itinerary && enhancedTravelPlan.itinerary.length > 0 && (
+        {enhancedTravelPlan?.itinerary && Array.isArray(enhancedTravelPlan.itinerary) && enhancedTravelPlan.itinerary.length > 0 && (
           <div className="mb-12">
             <div className="flex items-center justify-between mb-6">
               <h2 className="text-2xl font-bold text-gray-900 flex items-center">
@@ -400,10 +565,10 @@ const ViewTrip = () => {
             
             <div className="space-y-8">
               {enhancedTravelPlan.itinerary.map((dayData, index) => (
-                <div key={index} className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border border-gray-100">
+                <div key={index} className="bg-white/90 backdrop-blur-sm rounded-2xl shadow-lg overflow-hidden border border-gray-100 mb-8">
                   <div className="bg-gradient-to-r from-blue-500 to-purple-600 p-5">
                     <div className="flex justify-between items-center">
-                      <h3 className="text-xl font-bold text-white">{dayData.day || `Day ${index + 1}`}</h3>
+                      <h3 className="text-xl font-bold text-white">Day {index + 1}: {dayData.day || `Day ${index + 1}`}</h3>
                       <span className="bg-white/20 text-white px-3 py-1 rounded-full text-sm">
                         {dayData.date || `Day ${index + 1}`}
                       </span>
@@ -422,7 +587,7 @@ const ViewTrip = () => {
                         <div className="space-y-8">
                           {/* Morning Activities */}
                           {hasMorning && (
-                            <div>
+                            <div className="border-l-4 border-blue-500 pl-4">
                               <div className="flex items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
                                   <span className="mr-2">🌅</span> Morning Activities
@@ -436,11 +601,11 @@ const ViewTrip = () => {
                                   <div key={`morning-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img 
-                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`} 
+                                        src={place.placeImageUrl} 
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { 
-                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        onError={(e) => {
+                                          e.target.src = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
                                         }}
                                       />
                                     </div>
@@ -504,7 +669,7 @@ const ViewTrip = () => {
 
                           {/* Afternoon Activities */}
                           {hasAfternoon && (
-                            <div>
+                            <div className="border-l-4 border-yellow-500 pl-4">
                               <div className="flex items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
                                   <span className="mr-2">☀️</span> Afternoon Activities
@@ -518,11 +683,11 @@ const ViewTrip = () => {
                                   <div key={`afternoon-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img 
-                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`} 
+                                        src={place.placeImageUrl} 
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { 
-                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        onError={(e) => {
+                                          e.target.src = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
                                         }}
                                       />
                                     </div>
@@ -586,7 +751,7 @@ const ViewTrip = () => {
 
                           {/* Evening Activities */}
                           {hasEvening && (
-                            <div>
+                            <div className="border-l-4 border-purple-500 pl-4">
                               <div className="flex items-center mb-4">
                                 <h3 className="text-lg font-bold text-gray-800 flex items-center">
                                   <span className="mr-2">🌆</span> Evening Activities
@@ -600,11 +765,11 @@ const ViewTrip = () => {
                                   <div key={`evening-${placeIndex}`} className="flex flex-col md:flex-row gap-6 pb-6 border-b border-gray-100 last:border-b-0 last:pb-0">
                                     <div className="md:w-1/3 h-48 rounded-xl overflow-hidden shadow-md">
                                       <img 
-                                        src={place.placeImageUrl || `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`} 
+                                        src={place.placeImageUrl} 
                                         alt={place.placeName || 'Place Image'}
                                         className="w-full h-full object-cover transition-transform duration-500 hover:scale-110"
-                                        onError={(e) => { 
-                                          e.target.src = `https://placehold.co/800x600/007bff/ffffff?text=${encodeURIComponent(place.placeName || 'Place')}`;
+                                        onError={(e) => {
+                                          e.target.src = 'https://images.unsplash.com/photo-1475924156734-496f6cac6ec1?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=1200&q=80';
                                         }}
                                       />
                                     </div>
@@ -689,7 +854,7 @@ const ViewTrip = () => {
         )}
 
         {/* Enhanced message when itinerary is being processed */}
-        {(!enhancedTravelPlan?.itinerary || enhancedTravelPlan.itinerary.length === 0) && (
+        {(!enhancedTravelPlan || !enhancedTravelPlan.itinerary || !Array.isArray(enhancedTravelPlan.itinerary) || (Array.isArray(enhancedTravelPlan.itinerary) && enhancedTravelPlan.itinerary.length === 0)) && (
           <div className="mb-12">
             <h2 className="text-2xl font-bold text-gray-900 mb-6 flex items-center">
               <span className="mr-2">📅</span> Trip Itinerary
@@ -715,7 +880,7 @@ const ViewTrip = () => {
                       </svg>
                       Hotels Found
                     </h4>
-                    <p className="text-blue-700">We've found {enhancedTravelPlan.hotels.length} hotel options for your stay in {trip.userSelection?.location?.label || 'your destination'}.</p>
+                    <p className="text-blue-700">We've found {enhancedTravelPlan.hotels.length} hotel options for your stay in {trip?.userSelection?.location?.label || 'your destination'}.</p>
                   </div>
                 )}
                 
@@ -745,7 +910,7 @@ const ViewTrip = () => {
           </button>
           <button className="bg-gradient-to-r from-green-500 to-teal-600 hover:from-green-600 hover:to-teal-700 text-white font-medium py-3 px-8 rounded-lg transition-all duration-300 transform hover:scale-105 flex items-center shadow-lg">
             <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
             </svg>
             Share Trip
           </button>
@@ -757,8 +922,54 @@ const ViewTrip = () => {
           </button>
         </div>
       </div>
+      
+      {/* Financing Panel Modal */}
+      {showFinancing && (
+        <TripFinancingPanel 
+          tripData={trip} 
+          onClose={() => setShowFinancing(false)} 
+        />
+      )}
     </div>
   );
 };
 
 export default ViewTrip;
+
+// Add helper function to estimate cost from budget selection
+const getEstimatedCostFromBudget = (budgetId, days, travelers) => {
+  // Map budget IDs to average daily costs (in Indian Rupees)
+  const dailyCosts = {
+    '1': 3000,   // Cheap budget - ₹3,000 per day
+    '2': 6000,   // Moderate budget - ₹6,000 per day
+    '3': 12000   // Luxury budget - ₹12,000 per day
+  };
+  
+  // Get daily cost based on budget
+  const dailyCost = dailyCosts[budgetId] || 6000; // Default to moderate budget
+  
+  // Calculate total cost (daily cost * days * travelers)
+  const total = dailyCost * (parseInt(days) || 1) * (parseInt(travelers) || 1);
+  
+  return total;
+};
+
+// Add helper function to get budget tier name
+const getBudgetTierName = (tierId) => {
+  switch(tierId) {
+    case 1: return 'Cheap';
+    case 2: return 'Moderate';
+    case 3: return 'Luxury';
+    default: return 'Not Selected';
+  }
+};
+
+// Function to get guide cost based on budget tier
+const getGuideCostFromBudget = (budgetTier) => {
+  switch(budgetTier) {
+    case 1: return 3000; // Cheap tier
+    case 2: return 5000; // Moderate tier
+    case 3: return 8000; // Luxury tier
+    default: return 0;
+  }
+};

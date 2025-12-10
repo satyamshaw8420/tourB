@@ -19,11 +19,12 @@ const getPackingSuggestions = (condition, temperature) => {
     suggestions.push("Pack lightweight clothing, sun protection, and stay hydrated");
   }
   
-  if (condition.toLowerCase().includes('rain')) {
+  const normalizedCondition = condition.toLowerCase();
+  if (normalizedCondition.includes('rain') || normalizedCondition.includes('shower')) {
     suggestions.push("Bring a waterproof jacket and umbrella");
   }
   
-  if (condition.toLowerCase().includes('snow')) {
+  if (normalizedCondition.includes('snow')) {
     suggestions.push("Pack waterproof boots and gloves");
   }
   
@@ -31,13 +32,15 @@ const getPackingSuggestions = (condition, temperature) => {
 };
 
 const getActivityRecommendations = (condition) => {
-  if (condition.toLowerCase().includes('clear')) {
+  const normalizedCondition = condition.toLowerCase();
+  
+  if (normalizedCondition.includes('clear')) {
     return "Perfect weather for outdoor activities, sightseeing, and photography. Ideal for beach visits or hiking.";
-  } else if (condition.toLowerCase().includes('cloud')) {
+  } else if (normalizedCondition.includes('cloud')) {
     return "Good for both indoor and outdoor activities. Consider museums, parks, or shopping centers.";
-  } else if (condition.toLowerCase().includes('rain')) {
+  } else if (normalizedCondition.includes('rain') || normalizedCondition.includes('shower')) {
     return "Focus on indoor activities like museums, galleries, or cafes. Indoor pools or spas are great options.";
-  } else if (condition.toLowerCase().includes('snow')) {
+  } else if (normalizedCondition.includes('snow')) {
     return "Enjoy winter sports like skiing or snowboarding. Hot springs and cozy indoor activities are also great.";
   } else {
     return "Plan flexible activities that can be moved indoors if needed. Check local attractions for options.";
@@ -53,10 +56,13 @@ const getHealthAdvisory = (temperature, humidity) => {
     advisory.push("Protect against frostbite and hypothermia with proper clothing");
   }
   
-  if (humidity > 80) {
-    advisory.push("High humidity can cause dehydration faster - drink more water");
-  } else if (humidity < 30) {
-    advisory.push("Low humidity can dry out skin and throat - moisturize regularly");
+  // Only check humidity if it's available (not 'N/A')
+  if (humidity !== 'N/A') {
+    if (humidity > 80) {
+      advisory.push("High humidity can cause dehydration faster - drink more water");
+    } else if (humidity < 30) {
+      advisory.push("Low humidity can dry out skin and throat - moisturize regularly");
+    }
   }
   
   if (advisory.length === 0) {
@@ -66,61 +72,86 @@ const getHealthAdvisory = (temperature, humidity) => {
   return advisory.join('. ') + '.';
 };
 
-// Process forecast data to get daily forecasts
-const processForecastData = (forecastList) => {
-  const dailyForecasts = [];
+// Process forecast data to get daily forecasts (legacy function for OpenWeatherMap - no longer used)
+// const processForecastData = (forecastList) => {
+//   const dailyForecasts = [];
+//   const today = new Date();
+//   
+//   // Group forecasts by day
+//   const forecastsByDay = {};
+//   forecastList.forEach(item => {
+//     const date = new Date(item.dt * 1000);
+//     const dateStr = date.toISOString().split('T')[0];
+//     
+//     // Skip today's forecast
+//     if (date.getDate() === today.getDate() && date.getMonth() === today.getMonth()) {
+//       return;
+//     }
+//     
+//     if (!forecastsByDay[dateStr]) {
+//       forecastsByDay[dateStr] = [];
+//     }
+//     forecastsByDay[dateStr].push(item);
+//   });
+//   
+//   // Get one forecast per day (prefer midday)
+//   Object.keys(forecastsByDay).forEach(date => {
+//     if (dailyForecasts.length >= 5) return; // Limit to 5 days
+//     
+//     const forecasts = forecastsByDay[date];
+//     let bestForecast = forecasts[0];
+//     
+//     // Find forecast closest to midday
+//     const midday = 12;
+//     let minDiff = Math.abs(new Date(bestForecast.dt * 1000).getHours() - midday);
+//     
+//     forecasts.forEach(forecast => {
+//       const hour = new Date(forecast.dt * 1000).getHours();
+//       const diff = Math.abs(hour - midday);
+//       if (diff < minDiff) {
+//         minDiff = diff;
+//         bestForecast = forecast;
+//       }
+//     });
+//     
+//     const dateObj = new Date(bestForecast.dt * 1000);
+//     dailyForecasts.push({
+//       date: dateObj.toDateString(),
+//       high: Math.round(bestForecast.main.temp_max),
+//       low: Math.round(bestForecast.main.temp_min),
+//       condition: bestForecast.weather[0].main,
+//       description: bestForecast.weather[0].description,
+//       humidity: bestForecast.main.humidity,
+//       wind: Math.round(bestForecast.wind.speed * 3.6) // Convert m/s to km/h
+//     });
+//   });
+//   
+//   return dailyForecasts;
+// };
+
+// Process Open-Meteo forecast data
+const processOpenMeteoForecastData = (dailyData) => {
+  const forecasts = [];
+  
+  // Get the current date to skip today's forecast
   const today = new Date();
   
-  // Group forecasts by day
-  const forecastsByDay = {};
-  forecastList.forEach(item => {
-    const date = new Date(item.dt * 1000);
-    const dateStr = date.toISOString().split('T')[0];
+  // Process daily forecast data (skip today, get next 5 days)
+  for (let i = 1; i < Math.min(dailyData.time.length, 6); i++) {
+    const date = new Date(dailyData.time[i]);
     
-    // Skip today's forecast
-    if (date.getDate() === today.getDate() && date.getMonth() === today.getMonth()) {
-      return;
-    }
-    
-    if (!forecastsByDay[dateStr]) {
-      forecastsByDay[dateStr] = [];
-    }
-    forecastsByDay[dateStr].push(item);
-  });
-  
-  // Get one forecast per day (prefer midday)
-  Object.keys(forecastsByDay).forEach(date => {
-    if (dailyForecasts.length >= 5) return; // Limit to 5 days
-    
-    const forecasts = forecastsByDay[date];
-    let bestForecast = forecasts[0];
-    
-    // Find forecast closest to midday
-    const midday = 12;
-    let minDiff = Math.abs(new Date(bestForecast.dt * 1000).getHours() - midday);
-    
-    forecasts.forEach(forecast => {
-      const hour = new Date(forecast.dt * 1000).getHours();
-      const diff = Math.abs(hour - midday);
-      if (diff < minDiff) {
-        minDiff = diff;
-        bestForecast = forecast;
-      }
+    forecasts.push({
+      date: date.toDateString(),
+      high: Math.round(dailyData.temperature_2m_max[i]),
+      low: Math.round(dailyData.temperature_2m_min[i]),
+      condition: getWeatherConditionFromCode(dailyData.weather_code[i]),
+      description: getWeatherDescriptionFromCode(dailyData.weather_code[i]),
+      humidity: 'N/A', // Open-Meteo doesn't provide daily humidity in this API call
+      wind: 'N/A' // Open-Meteo doesn't provide daily wind in this API call
     });
-    
-    const dateObj = new Date(bestForecast.dt * 1000);
-    dailyForecasts.push({
-      date: dateObj.toDateString(),
-      high: Math.round(bestForecast.main.temp_max),
-      low: Math.round(bestForecast.main.temp_min),
-      condition: bestForecast.weather[0].main,
-      description: bestForecast.weather[0].description,
-      humidity: bestForecast.main.humidity,
-      wind: Math.round(bestForecast.wind.speed * 3.6) // Convert m/s to km/h
-    });
-  });
+  }
   
-  return dailyForecasts;
+  return forecasts;
 };
 
 const WeatherIntegration = () => {
@@ -170,45 +201,30 @@ const WeatherIntegration = () => {
         throw new Error(`Could not find coordinates for ${locationName}`);
       }
       
-      // Call OpenWeather API with coordinates
-      const apiKey = import.meta.env.VITE_OPENWEATHER_API_KEY;
-      if (!apiKey) {
-        throw new Error('OpenWeather API key is not configured');
+      // Call Open-Meteo API with coordinates (no API key required)
+      // Fetch current weather and forecast data in one request
+      const apiUrl = `https://api.open-meteo.com/v1/forecast?latitude=${coordinates.lat}&longitude=${coordinates.lng}&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,pressure_msl,windspeed_10m&hourly=temperature_2m,relative_humidity_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min&timezone=auto`;
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Failed to fetch weather data from Open-Meteo: ${response.status}`);
       }
       
-      // Fetch current weather data
-      const currentWeatherUrl = `https://api.openweathermap.org/data/2.5/weather?lat=${coordinates.lat}&lon=${coordinates.lng}&appid=${apiKey}&units=metric`;
-      const currentResponse = await fetch(currentWeatherUrl);
-      
-      if (!currentResponse.ok) {
-        throw new Error(`Failed to fetch current weather data: ${currentResponse.status}`);
-      }
-      
-      const currentData = await currentResponse.json();
-      
-      // Fetch 5-day forecast data
-      const forecastUrl = `https://api.openweathermap.org/data/2.5/forecast?lat=${coordinates.lat}&lon=${coordinates.lng}&appid=${apiKey}&units=metric`;
-      const forecastResponse = await fetch(forecastUrl);
-      
-      if (!forecastResponse.ok) {
-        throw new Error(`Failed to fetch forecast data: ${forecastResponse.status}`);
-      }
-      
-      const forecastData = await forecastResponse.json();
+      const data = await response.json();
       
       // Process and format the data
       const processedWeatherData = {
         location: locationName,
         current: {
-          temperature: Math.round(currentData.main.temp),
-          condition: currentData.weather[0].main,
-          description: currentData.weather[0].description,
-          humidity: currentData.main.humidity,
-          wind: Math.round(currentData.wind.speed * 3.6), // Convert m/s to km/h
-          feelsLike: Math.round(currentData.main.feels_like),
-          pressure: currentData.main.pressure
+          temperature: Math.round(data.current.temperature_2m),
+          condition: getWeatherConditionFromCode(data.current.weather_code),
+          description: getWeatherDescriptionFromCode(data.current.weather_code),
+          humidity: data.current.relative_humidity_2m,
+          wind: Math.round(data.current.windspeed_10m),
+          feelsLike: Math.round(data.current.apparent_temperature),
+          pressure: Math.round(data.current.pressure_msl)
         },
-        forecast: processForecastData(forecastData.list)
+        forecast: processOpenMeteoForecastData(data.daily)
       };
       
       setWeatherData(processedWeatherData);
@@ -220,27 +236,125 @@ const WeatherIntegration = () => {
       setLoading(false);
     }
   };
+  
+  // Helper function to convert Open-Meteo weather codes to condition names
+  const getWeatherConditionFromCode = (code) => {
+    const weatherCodes = {
+      0: 'Clear',
+      1: 'Mainly Clear',
+      2: 'Partly Cloudy',
+      3: 'Overcast',
+      45: 'Fog',
+      48: 'Depositing Rime Fog',
+      51: 'Light Drizzle',
+      53: 'Moderate Drizzle',
+      55: 'Dense Drizzle',
+      56: 'Light Freezing Drizzle',
+      57: 'Dense Freezing Drizzle',
+      61: 'Slight Rain',
+      63: 'Moderate Rain',
+      65: 'Heavy Rain',
+      66: 'Light Freezing Rain',
+      67: 'Heavy Freezing Rain',
+      71: 'Slight Snow Fall',
+      73: 'Moderate Snow Fall',
+      75: 'Heavy Snow Fall',
+      77: 'Snow Grains',
+      80: 'Slight Rain Showers',
+      81: 'Moderate Rain Showers',
+      82: 'Violent Rain Showers',
+      85: 'Slight Snow Showers',
+      86: 'Heavy Snow Showers',
+      95: 'Thunderstorm',
+      96: 'Thunderstorm with Slight Hail',
+      99: 'Thunderstorm with Heavy Hail'
+    };
+    
+    return weatherCodes[code] || 'Unknown';
+  };
+  
+  // Helper function to convert Open-Meteo weather codes to descriptions
+  const getWeatherDescriptionFromCode = (code) => {
+    const weatherDescriptions = {
+      0: 'Clear sky',
+      1: 'Mainly clear sky',
+      2: 'Partly cloudy',
+      3: 'Overcast',
+      45: 'Foggy conditions',
+      48: 'Fog with ice crystals',
+      51: 'Light drizzle',
+      53: 'Moderate drizzle',
+      55: 'Heavy drizzle',
+      56: 'Light freezing drizzle',
+      57: 'Heavy freezing drizzle',
+      61: 'Slight rain',
+      63: 'Moderate rain',
+      65: 'Heavy rain',
+      66: 'Light freezing rain',
+      67: 'Heavy freezing rain',
+      71: 'Light snowfall',
+      73: 'Moderate snowfall',
+      75: 'Heavy snowfall',
+      77: 'Snow grains',
+      80: 'Slight rain showers',
+      81: 'Moderate rain showers',
+      82: 'Violent rain showers',
+      85: 'Slight snow showers',
+      86: 'Heavy snow showers',
+      95: 'Thunderstorm',
+      96: 'Thunderstorm with slight hail',
+      99: 'Thunderstorm with heavy hail'
+    };
+    
+    return weatherDescriptions[code] || 'Unknown weather conditions';
+  };
+  
+  // Process Open-Meteo forecast data
+  const processOpenMeteoForecastData = (dailyData) => {
+    const forecasts = [];
+    
+    // Get the current date to skip today's forecast
+    const today = new Date();
+    
+    // Process daily forecast data (skip today, get next 5 days)
+    for (let i = 1; i < Math.min(dailyData.time.length, 6); i++) {
+      const date = new Date(dailyData.time[i]);
+      
+      forecasts.push({
+        date: date.toDateString(),
+        high: Math.round(dailyData.temperature_2m_max[i]),
+        low: Math.round(dailyData.temperature_2m_min[i]),
+        condition: getWeatherConditionFromCode(dailyData.weather_code[i]),
+        description: getWeatherDescriptionFromCode(dailyData.weather_code[i]),
+        humidity: 'N/A', // Open-Meteo doesn't provide daily humidity in this API call
+        wind: 'N/A' // Open-Meteo doesn't provide daily wind in this API call
+      });
+    }
+    
+    return forecasts;
+  };
 
   // Get weather icon based on condition
   const getWeatherIcon = (condition) => {
-    switch (condition.toLowerCase()) {
-      case 'clear':
-        return '☀️';
-      case 'clouds':
-        return '☁️';
-      case 'rain':
-        return '🌧️';
-      case 'drizzle':
-        return '🌦️';
-      case 'thunderstorm':
-        return '⛈️';
-      case 'snow':
-        return '❄️';
-      case 'mist':
-      case 'fog':
-        return '🌫️';
-      default:
-        return '🌤️';
+    // Normalize condition for icon mapping
+    const normalizedCondition = condition.toLowerCase();
+    
+    if (normalizedCondition.includes('clear')) {
+      return '☀️';
+    } else if (normalizedCondition.includes('cloud')) {
+      return '☁️';
+    } else if (normalizedCondition.includes('rain') || normalizedCondition.includes('shower')) {
+      return '🌧️';
+    } else if (normalizedCondition.includes('drizzle')) {
+      return '🌦️';
+    } else if (normalizedCondition.includes('thunder')) {
+      return '⛈️';
+    } else if (normalizedCondition.includes('snow') || normalizedCondition.includes('sleet')) {
+      return '❄️';
+    } else if (normalizedCondition.includes('fog') || normalizedCondition.includes('mist')) {
+      return '🌫️';
+    } else {
+      return '🌤️';
     }
   };
 
@@ -362,7 +476,7 @@ const WeatherIntegration = () => {
         {weatherData && !loading && (
           <div className="bg-white rounded-2xl shadow-lg overflow-hidden mb-12">
             {/* Current Weather */}
-            <div className={`bg-gradient-to-r ${getTempBackground(weatherData.current.temperature)} p-8 text-white`}>
+            <div className={`bg-gradient-to-r ${getTempBackground(weatherData.current.temperature)} p-8 text-black`}>
               <div className="flex flex-col md:flex-row justify-between items-center">
                 <div>
                   <h2 className="text-3xl font-bold mb-2">{weatherData.location}</h2>

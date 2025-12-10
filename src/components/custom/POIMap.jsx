@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Popup } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
 import 'leaflet/dist/leaflet.css';
 import L from 'leaflet';
 
-// Create beautiful custom icons with SVG
+// Create beautiful custom icons with SVG for different POI types
 const createCustomIcon = (color, iconType) => {
   let iconPath = '';
   let iconSize = [32, 48];
@@ -20,6 +20,14 @@ const createCustomIcon = (color, iconType) => {
       // Pin icon for attractions
       iconPath = `<circle cx="12" cy="10" r="3" fill="white"/>
                   <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z" fill="${color}"/>`;
+      break;
+    case 'restaurant':
+      // Fork and knife icon for restaurants
+      iconPath = `<path d="M11 9H9V2H7v7H5V2H3v7c0 2.12 1.66 3.84 3.75 3.97V22h2.5v-9.03C11.34 12.84 13 11.12 13 9V2h-2v7zm5-3v8h2.5v8H21V2c-2.76 0-5 2.24-5 4z" fill="white"/>`;
+      break;
+    case 'poi':
+      // Star icon for general points of interest
+      iconPath = `<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" fill="${color}"/>`;
       break;
     default:
       // Default pin icon
@@ -44,11 +52,11 @@ const createCustomIcon = (color, iconType) => {
   });
 };
 
-// Custom hotel icon with BLUE styling (as per project specification)
+// Custom icons for different POI types
 const hotelIcon = createCustomIcon('#3498db', 'hotel'); // Blue
-
-// Custom attraction icon with RED styling (as per project specification)
 const attractionIcon = createCustomIcon('#e74c3c', 'attraction'); // Red
+const restaurantIcon = createCustomIcon('#2ecc71', 'restaurant'); // Green
+const poiIcon = createCustomIcon('#9b59b6', 'poi'); // Purple
 
 // Fix for default marker icons in Leaflet with fallback to local assets
 delete L.Icon.Default.prototype._getIconUrl;
@@ -58,22 +66,65 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://unpkg.com/leaflet@1.7.1/dist/images/marker-shadow.png',
 });
 
-const HotelMap = ({ hotels, center, zoom = 13 }) => {
+// Component to handle map events and geolocation
+const MapEvents = ({ onLocationFound }) => {
+  const map = useMap();
+
+  useEffect(() => {
+    // Function to handle location found event
+    const handleLocationFound = (e) => {
+      onLocationFound(e.latlng);
+    };
+
+    // Add event listener for location found
+    map.on('locationfound', handleLocationFound);
+
+    // Clean up event listener
+    return () => {
+      map.off('locationfound', handleLocationFound);
+    };
+  }, [map, onLocationFound]);
+
+  return null;
+};
+
+const POIMap = ({ center, zoom = 13, pois = [], onLocationClick }) => {
+  const [userLocation, setUserLocation] = useState(null);
   const [mapCenter, setMapCenter] = useState(center);
-  
+
   useEffect(() => {
     if (center) {
       setMapCenter(center);
     }
   }, [center]);
 
-  if (!hotels || hotels.length === 0) {
-    return (
-      <div className="bg-gray-100 rounded-xl p-8 text-center">
-        <p className="text-gray-500">No hotel locations available to display on map</p>
-      </div>
-    );
-  }
+  // Function to get user's current location
+  const getUserLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (position) => {
+          const latlng = {
+            lat: position.coords.latitude,
+            lng: position.coords.longitude
+          };
+          setUserLocation(latlng);
+          setMapCenter(latlng);
+        },
+        (error) => {
+          console.error('Error getting location:', error);
+          alert('Unable to get your location. Please enable location services and try again.');
+        }
+      );
+    } else {
+      alert('Geolocation is not supported by your browser.');
+    }
+  };
+
+  // Handle location found from MapEvents
+  const handleLocationFound = (latlng) => {
+    setUserLocation(latlng);
+    setMapCenter(latlng);
+  };
 
   return (
     <div className="rounded-xl overflow-hidden shadow-lg h-96 w-full relative">
@@ -117,6 +168,15 @@ const HotelMap = ({ hotels, center, zoom = 13 }) => {
           z-index: 1000 !important;
           filter: drop-shadow(0 6px 12px rgba(0,0,0,0.4));
         }
+        .user-location-marker {
+          background-color: #4CAF50;
+          border: 2px solid white;
+          border-radius: 50%;
+          width: 20px;
+          height: 20px;
+          box-shadow: 0 0 10px rgba(0,0,0,0.5);
+          animation: bounce 2s infinite;
+        }
         .leaflet-container {
           cursor: grab;
         }
@@ -144,81 +204,91 @@ const HotelMap = ({ hotels, center, zoom = 13 }) => {
         markerZoomAnimation={true}
         fadeAnimation={true}
       >
-        {/* Stamen Toner tile layer for enhanced map visualization (as per project specification) */}
+        {/* Stamen Toner tile layer for enhanced map visualization */}
         <TileLayer
           url="https://stamen-tiles.a.ssl.fastly.net/toner/{z}/{x}/{y}.png"
           attribution='Map tiles by <a href="http://stamen.com">Stamen Design</a>, under <a href="http://creativecommons.org/licenses/by/3.0">CC BY 3.0</a>. Data by <a href="http://openstreetmap.org">OpenStreetMap</a>, under <a href="http://www.openstreetmap.org/copyright">ODbL</a>.'
           maxZoom={20}
         />
         
-        {/* Enhanced Google Maps-like tile layer with maximum detail */}
-        <TileLayer
-          url="https://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}"
-          attribution='&copy; Google Maps'
-          maxZoom={20}
-          subdomains={['mt0','mt1','mt2','mt3']}
-        />
+        {/* Map events handler */}
+        <MapEvents onLocationFound={handleLocationFound} />
         
-        {/* Fallback OpenStreetMap tile layer with high detail */}
-        <TileLayer
-          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          maxZoom={19}
-        />
+        {/* User location marker */}
+        {userLocation && (
+          <Marker 
+            position={[userLocation.lat, userLocation.lng]}
+            icon={L.divIcon({
+              className: 'user-location-marker',
+              iconSize: [20, 20],
+              iconAnchor: [10, 10]
+            })}
+          >
+            <Popup>
+              <div className="p-2">
+                <h3 className="font-bold text-green-600">Your Location</h3>
+                <p className="text-sm">Lat: {userLocation.lat.toFixed(4)}</p>
+                <p className="text-sm">Lng: {userLocation.lng.toFixed(4)}</p>
+              </div>
+            </Popup>
+          </Marker>
+        )}
         
-        {/* Satellite hybrid view for maximum detail */}
-        <TileLayer
-          url="https://{s}.google.com/vt/lyrs=s,h&x={x}&y={y}&z={z}"
-          attribution='&copy; Google Maps Satellite'
-          maxZoom={20}
-          subdomains={['mt0','mt1','mt2','mt3']}
-          opacity={0.85}
-        />
-        
-        {hotels.map((hotel, index) => {
-          // Check if hotel has valid coordinates
-          if (!hotel.geoCoordinates || !hotel.geoCoordinates.lat || !hotel.geoCoordinates.lng) {
+        {/* Render POIs */}
+        {pois.map((poi, index) => {
+          // Check if POI has valid coordinates
+          if (!poi.lat || !poi.lng) {
             return null;
           }
           
-          const position = [hotel.geoCoordinates.lat, hotel.geoCoordinates.lng];
+          const position = [poi.lat, poi.lng];
+          
+          // Determine icon based on POI type
+          let icon = attractionIcon;
+          if (poi.type === 'hotel') {
+            icon = hotelIcon;
+          } else if (poi.type === 'restaurant') {
+            icon = restaurantIcon;
+          } else if (poi.type === 'poi') {
+            icon = poiIcon;
+          }
           
           return (
             <Marker 
               key={index} 
               position={position}
-              icon={hotelIcon}
+              icon={icon}
               className='custom-map-marker'
             >
               <Popup>
-                <div className="min-w-48">
-                  <h3 className="font-bold text-gray-800 text-lg">{hotel.hotelName}</h3>
-                  <p className="text-sm text-gray-600 mt-1">{hotel.hotelAddress}</p>
-                  {hotel.price && (
-                    <p className="text-blue-600 font-semibold mt-1">{hotel.price}</p>
+                <div className="min-w-48 p-2">
+                  <h3 className="font-bold text-gray-800 text-lg">{poi.name}</h3>
+                  {poi.description && (
+                    <p className="text-sm text-gray-600 mt-1">{poi.description}</p>
                   )}
-                  {hotel.rating && (
+                  {poi.address && (
+                    <p className="text-xs text-gray-500 mt-1">{poi.address}</p>
+                  )}
+                  {poi.rating && (
                     <div className="flex items-center mt-1">
                       {[...Array(5)].map((_, i) => (
                         <svg 
                           key={i} 
-                          className={`w-4 h-4 ${i < hotel.rating ? 'text-yellow-400' : 'text-gray-300'}`} 
+                          className={`w-4 h-4 ${i < poi.rating ? 'text-yellow-400' : 'text-gray-300'}`} 
                           fill="currentColor" 
                           viewBox="0 0 20 20"
                         >
                           <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
                         </svg>
                       ))}
-                      <span className="ml-1 text-sm text-gray-600">({hotel.rating})</span>
+                      <span className="ml-1 text-sm text-gray-600">({poi.rating})</span>
                     </div>
                   )}
                   <button 
                     className="mt-2 bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white text-xs px-3 py-1 rounded transition-all duration-300"
-                    onClick={() => {
-                      window.open(`https://www.booking.com/search.html?ss=${encodeURIComponent(hotel.hotelName)}`, '_blank');
-                    }}
+                    onClick={() => onLocationClick && onLocationClick(poi)}
                   >
-                    Book Now
+                    View Details
                   </button>
                 </div>
               </Popup>
@@ -226,8 +296,20 @@ const HotelMap = ({ hotels, center, zoom = 13 }) => {
           );
         })}
       </MapContainer>
+      
+      {/* Geolocation button */}
+      <button
+        onClick={getUserLocation}
+        className="absolute top-4 right-4 bg-white shadow-lg rounded-full p-3 hover:bg-gray-100 transition-all duration-300 z-10"
+        title="Find my location"
+      >
+        <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" />
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
+        </svg>
+      </button>
     </div>
   );
 };
 
-export default HotelMap;
+export default POIMap;

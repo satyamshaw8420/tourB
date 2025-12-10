@@ -19,6 +19,9 @@ import ViewTrip from './view-trip/index.jsx'
 import SignUp from './sign-up/index.jsx'
 import FinancialPage from './components/custom/FinancialPage.jsx'
 import MultiTrip from './multi-trip/index.jsx'
+import GuidePage from './guide/index.jsx' // Added GuidePage import
+import DailyItineraryDemo from './components/custom/DailyItineraryDemo.jsx'; // Added DailyItineraryDemo import
+// Debug components removed
 import { GoogleOAuthProvider } from '@react-oauth/google';
 import { ConvexProvider, ConvexReactClient } from "convex/react";
 const convex = new ConvexReactClient(import.meta.env.VITE_CONVEX_URL);
@@ -135,6 +138,14 @@ const router = createBrowserRouter([
       {
         path: '/multi-trip',
         element: <MultiTrip />
+      },
+      {
+        path: '/guide',
+        element: <GuidePage />
+      },
+      {
+        path: '/daily-itinerary-demo',
+        element: <DailyItineraryDemo />
       }
     ]
   }
