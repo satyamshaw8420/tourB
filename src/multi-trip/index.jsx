@@ -39,7 +39,7 @@ function MultiTrip() {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [loading, setLoading] = useState(false);
   const [activeDestinationIndex, setActiveDestinationIndex] = useState(-1); // Track which destination is being edited
-  const [initialLoad, setInitialLoad] = useState(true); // Add initial load state
+  const [initialLoad, setInitialLoad] = useState(false); // Changed initial value to false
 
   // Listen for the custom event from Header to show Google Sign-In
   useEffect(() => {
